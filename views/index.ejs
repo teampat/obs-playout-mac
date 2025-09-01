@@ -75,33 +75,34 @@
   <div class="container mx-auto px-4 py-6 max-w-7xl">
     <%- include('partials/header') %>
 
-    <!-- OBS Controls Section -->
-    <section class="mb-8">
-      <h3 class="text-lg font-semibold mb-4 text-white flex items-center gap-2">
-        🎛️ OBS Controls
-      </h3>
-    </section>
-
     <!-- Video Progress Bar - Fixed Overlay -->
+
     <div id="progressContainer" class="hidden fixed top-0 left-0 right-0 z-50 bg-dark-900/90 backdrop-blur-sm border-b border-dark-700 p-4">
       <div class="container mx-auto max-w-7xl">
-        <div class="flex items-center justify-between mb-2">
-          <span id="currentVideoName" class="text-white font-medium text-sm">No video playing</span>
-          <span id="timeDisplay" class="text-gray-400 text-sm">00:00 / 00:00</span>
+        <div class="flex items-center justify-between mb-3">
+          <span id="currentVideoName" class="text-white font-semibold text-base md:text-lg">No video playing</span>
+          <span id="timeDisplay" class="text-gray-300 text-base md:text-lg font-mono">00:00 / 00:00</span>
         </div>
-        <div class="w-full bg-dark-700 rounded-full h-2 mb-2 cursor-pointer relative hover:h-3 transition-all duration-200 group" id="progressBarContainer" title="Click to seek">
-          <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300 group-hover:h-3 relative" style="width: 0%">
-            <div class="absolute right-0 top-0 w-3 h-3 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 shadow-lg"></div>
+        <div class="w-full bg-dark-700 rounded-full h-6 md:h-8 mb-4 cursor-pointer relative transition-all duration-200 group" id="progressBarContainer" title="แตะเพื่อเลื่อน">
+          <div id="progressBar" class="bg-blue-600 h-6 md:h-8 rounded-full transition-all duration-300 relative" style="width: 0%">
+            <!-- Thumb - positioned at the end of progress, constrained within container -->
+            <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 bg-blue-500 border-4 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 16px); touch-action: none;"></div>
           </div>
         </div>
-        <div class="flex items-center justify-center gap-3">
-          <button id="playPauseBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
+        <div class="flex items-center justify-center gap-3 mt-2 flex-wrap">
+          <button id="seekBackBtn" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px]">
+            ⏪ -10s
+          </button>
+          <button id="playPauseBtn" class="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all shadow-lg touch-manipulation min-w-[80px] min-h-[56px]">
             ⏸️ Pause
           </button>
-          <button id="restartBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
+          <button id="seekForwardBtn" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px]">
+            ⏩ +10s
+          </button>
+          <button id="restartBtn" class="bg-gray-600 hover:bg-gray-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px]">
             🔄 Restart
           </button>
-          <button id="stopBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
+          <button id="stopBtn" class="bg-red-600 hover:bg-red-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px]">
             ⏹️ Stop
           </button>
         </div>
@@ -192,14 +193,39 @@
 
     function updateProgressBar(current, total) {
       const progressBar = document.getElementById('progressBar');
+      const progressThumb = document.getElementById('progressThumb');
       const timeDisplay = document.getElementById('timeDisplay');
+      
+      // Update last known time for seek functionality
+      updateLastKnownTime(current * 1000); // Convert seconds to milliseconds
       
       if (total > 0) {
         const percentage = (current / total) * 100;
         progressBar.style.width = `${Math.min(percentage, 100)}%`;
+        
+        // Position thumb: 
+        // - At 0%: left edge (16px from left)
+        // - At 100%: right edge (16px from right)
+        // - Calculate position within container bounds
+        const containerWidth = document.getElementById('progressBarContainer')?.offsetWidth || 300;
+        const thumbSize = 32; // 8*4 = 32px (w-8 h-8)
+        const thumbPosition = Math.max(thumbSize/2, Math.min(containerWidth - thumbSize/2, (percentage / 100) * containerWidth));
+        
+        if (progressThumb) {
+          progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
+          progressThumb.style.position = 'absolute';
+        }
+        
         timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
       } else {
         progressBar.style.width = '0%';
+        
+        // Reset thumb to start position
+        if (progressThumb) {
+          const thumbSize = 32;
+          progressThumb.style.left = `${thumbSize/2 - thumbSize/2}px`; // At left edge
+        }
+        
         timeDisplay.textContent = '00:00 / 00:00';
       }
     }
@@ -339,8 +365,6 @@
             .then(seekData => {
               console.log('Seek response:', seekData);
               if (seekData.ok) {
-                showToast(`⏩ Seeked to ${formatTime(seekTimeSeconds)}`, 'success');
-                
                 // Immediate progress check to update display
                 setTimeout(checkVideoProgress, 200);
               } else {
@@ -955,6 +979,94 @@
       }
     });
 
+    // Track last known current time for continuous seeking
+    let lastKnownCurrentTime = 0;
+    
+    // Update last known time from progress updates
+    function updateLastKnownTime(currentTimeMs) {
+      if (currentTimeMs !== undefined && currentTimeMs !== null) {
+        lastKnownCurrentTime = currentTimeMs;
+      }
+    }
+
+    // Seek backward 10 seconds
+    document.getElementById('seekBackBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('seekBackBtn');
+      
+      if (!obsConnected || currentPlayingType !== 'video') {
+        showToast('❌ No video playing', 'error');
+        return;
+      }
+      
+      if (btn.disabled) return;
+      btn.disabled = true;
+      
+      try {
+        // Use last known time and subtract 10 seconds
+        const seekTimeMs = Math.max(0, lastKnownCurrentTime - 10000);
+        
+        const res = await fetch('/obs/seek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeMs: seekTimeMs })
+        });
+        
+        const data = await res.json();
+        if (data.ok) {
+          // Update our tracking time immediately
+          lastKnownCurrentTime = seekTimeMs;
+          
+          // Update progress display
+          setTimeout(checkVideoProgress, 200);
+        } else {
+          showToast('❌ Failed to seek: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Seek forward 10 seconds
+    document.getElementById('seekForwardBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('seekForwardBtn');
+      
+      if (!obsConnected || currentPlayingType !== 'video') {
+        showToast('❌ No video playing', 'error');
+        return;
+      }
+      
+      if (btn.disabled) return;
+      btn.disabled = true;
+      
+      try {
+        // Use last known time and add 10 seconds
+        const seekTimeMs = lastKnownCurrentTime + 10000;
+        
+        const res = await fetch('/obs/seek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeMs: seekTimeMs })
+        });
+        
+        const data = await res.json();
+        if (data.ok) {
+          // Update our tracking time immediately
+          lastKnownCurrentTime = seekTimeMs;
+          
+          // Update progress display
+          setTimeout(checkVideoProgress, 200);
+        } else {
+          showToast('❌ Failed to seek: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
     // Toast notification system
     function showToast(message, type = 'info') {
       const toast = document.createElement('div');
@@ -982,6 +1094,152 @@
     
     // Setup progress bar seek functionality using event delegation
     document.addEventListener('click', handleProgressBarClick);
+    
+    // Touch drag functionality for progress bar
+    let isDragging = false;
+    let dragStartX = 0;
+    let pendingSeekTimeMs = null;
+    
+    function updateProgressBarVisual(clientX) {
+      if (!obsConnected || currentPlayingType !== 'video') {
+        return;
+      }
+      
+      const progressBarContainer = document.getElementById('progressBarContainer');
+      if (!progressBarContainer) return;
+      
+      // Get current video status to know total duration
+      fetch('/obs/progress')
+        .then(res => res.json())
+        .then(data => {
+          if (data.ok && data.mediaDuration > 0) {
+            const rect = progressBarContainer.getBoundingClientRect();
+            if (!rect || rect.width === 0) return;
+            
+            const seekX = clientX - rect.left;
+            const percentage = Math.max(0, Math.min(1, seekX / rect.width));
+            const seekTimeMs = Math.floor(percentage * data.mediaDuration);
+            
+            // Store the time we want to seek to
+            pendingSeekTimeMs = seekTimeMs;
+            
+            // Update progress bar immediately for visual feedback only
+            const progressBar = document.getElementById('progressBar');
+            const progressThumb = document.getElementById('progressThumb');
+            if (progressBar) {
+              progressBar.style.width = `${percentage * 100}%`;
+              
+              // Update thumb position during drag
+              const containerWidth = progressBarContainer.offsetWidth;
+              const thumbSize = 32; // 8*4 = 32px (w-8 h-8)
+              const thumbPosition = Math.max(thumbSize/2, Math.min(containerWidth - thumbSize/2, percentage * containerWidth));
+              
+              if (progressThumb) {
+                progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
+                progressThumb.style.position = 'absolute';
+              }
+            }
+            
+            // Update time display for visual feedback
+            const timeDisplay = document.getElementById('timeDisplay');
+            if (timeDisplay) {
+              const seekTimeSeconds = Math.floor(seekTimeMs / 1000);
+              const totalTimeSeconds = Math.floor(data.mediaDuration / 1000);
+              timeDisplay.textContent = `${formatTime(seekTimeSeconds)} / ${formatTime(totalTimeSeconds)}`;
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Progress fetch error:', error);
+        });
+    }
+    
+    function performSeek() {
+      if (pendingSeekTimeMs === null) return;
+      
+      const seekTimeMs = pendingSeekTimeMs;
+      pendingSeekTimeMs = null;
+      
+      // Perform the actual seek
+      fetch('/obs/seek', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeMs: seekTimeMs })
+      })
+      .then(res => res.json())
+      .then(seekData => {
+        if (seekData.ok) {
+          // Update progress check after seek
+          setTimeout(checkVideoProgress, 200);
+        } else {
+          showToast('❌ Failed to seek: ' + (seekData.error || 'unknown'), 'error');
+          // Restore original progress if seek failed
+          setTimeout(checkVideoProgress, 100);
+        }
+      })
+      .catch(error => {
+        console.error('Seek error:', error);
+        showToast('❌ Seek error: ' + error.message, 'error');
+        // Restore original progress if seek failed
+        setTimeout(checkVideoProgress, 100);
+      });
+    }
+    
+    // Mouse events for drag
+    document.addEventListener('mousedown', (e) => {
+      const progressBarContainer = e.target.closest('#progressBarContainer');
+      if (progressBarContainer) {
+        isDragging = true;
+        dragStartX = e.clientX;
+        pendingSeekTimeMs = null;
+        document.body.style.userSelect = 'none'; // Prevent text selection
+        e.preventDefault();
+      }
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        updateProgressBarVisual(e.clientX);
+        e.preventDefault();
+      }
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.userSelect = '';
+        // Perform seek only after mouse up
+        performSeek();
+      }
+    });
+    
+    // Touch events for mobile drag
+    document.addEventListener('touchstart', (e) => {
+      const progressBarContainer = e.target.closest('#progressBarContainer');
+      if (progressBarContainer) {
+        isDragging = true;
+        const touch = e.touches[0];
+        dragStartX = touch.clientX;
+        pendingSeekTimeMs = null;
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    document.addEventListener('touchmove', (e) => {
+      if (isDragging) {
+        const touch = e.touches[0];
+        updateProgressBarVisual(touch.clientX);
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    document.addEventListener('touchend', () => {
+      if (isDragging) {
+        isDragging = false;
+        // Perform seek only after touch end
+        performSeek();
+      }
+    });
     
     fetchMedia();
     
