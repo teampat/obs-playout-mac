@@ -128,6 +128,95 @@ function cacheKey(str) {
   return Buffer.from(str).toString("base64url");
 }
 
+// Function to get video duration with caching
+async function getVideoDuration(filePath) {
+  try {
+    // Generate cache key for duration
+    const key = cacheKey(`duration:${filePath}`);
+    const cachePath = path.join(CONFIG.THUMB_CACHE, key + ".json");
+    
+    // Check if cached duration exists
+    if (fs.existsSync(cachePath)) {
+      try {
+        const cached = JSON.parse(await fsp.readFile(cachePath, 'utf-8'));
+        return cached.duration;
+      } catch (e) {
+        // Cache file corrupted, continue to regenerate
+      }
+    }
+    
+    // Get duration using ffprobe
+    const duration = await new Promise((resolve) => {
+      const ffprobe = spawn("ffprobe", [
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        filePath
+      ]);
+      
+      let output = "";
+      ffprobe.stdout.on("data", (data) => {
+        output += data.toString();
+      });
+      
+      ffprobe.on("close", (code) => {
+        if (code === 0) {
+          try {
+            const info = JSON.parse(output);
+            const duration = parseFloat(info.format.duration);
+            resolve(duration);
+          } catch (e) {
+            resolve(null);
+          }
+        } else {
+          resolve(null);
+        }
+      });
+      
+      ffprobe.on("error", () => {
+        resolve(null);
+      });
+    });
+    
+    // Cache the duration
+    if (duration !== null) {
+      try {
+        // Ensure cache directory exists
+        await fsp.mkdir(CONFIG.THUMB_CACHE, { recursive: true });
+        
+        const cacheData = {
+          filePath: filePath,
+          duration: duration,
+          timestamp: Date.now()
+        };
+        await fsp.writeFile(cachePath, JSON.stringify(cacheData, null, 2));
+      } catch (e) {
+        console.error(`Error caching duration for ${filePath}:`, e.message);
+      }
+    }
+    
+    return duration;
+  } catch (e) {
+    console.error(`Error getting duration for ${filePath}:`, e.message);
+    return null;
+  }
+}
+
+// Format duration to readable string
+function formatDuration(seconds) {
+  if (!seconds || isNaN(seconds)) return null;
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+}
+
 // -------------- Thumbnail endpoints -------------
 app.get("/thumb/image", async (req, res) => {
   try {
@@ -183,20 +272,33 @@ app.get("/media", async (req, res) => {
     const videos = await listFilesRecursive(LIB_DIR, "video");
     const images = await listFilesRecursive(LIB_DIR, "image");
 
-    const mapItem = (full, type) => ({
+    const mapVideoItem = async (full) => {
+      const duration = await getVideoDuration(full);
+      return {
+        id: cacheKey(full),
+        type: "video",
+        filename: path.basename(full),
+        path: full,
+        url: `/thumb/video?file=${encodeURIComponent(full)}&t=5`,
+        duration: duration,
+        durationFormatted: formatDuration(duration)
+      };
+    };
+
+    const mapImageItem = (full) => ({
       id: cacheKey(full),
-      type,
+      type: "image",
       filename: path.basename(full),
       path: full,
-      url: type === "video"
-        ? `/thumb/video?file=${encodeURIComponent(full)}&t=5`
-        : `/thumb/image?file=${encodeURIComponent(full)}`,
+      url: `/thumb/image?file=${encodeURIComponent(full)}`,
     });
 
-    const list = [
-      ...videos.map((f) => mapItem(f, "video")),
-      ...images.map((f) => mapItem(f, "image")),
-    ].sort((a, b) => a.filename.localeCompare(b.filename));
+    // Process videos with duration and images without
+    const videoItems = await Promise.all(videos.map(mapVideoItem));
+    const imageItems = images.map(mapImageItem);
+    
+    const list = [...videoItems, ...imageItems]
+      .sort((a, b) => a.filename.localeCompare(b.filename));
 
     res.json({ ok: true, items: list });
   } catch (e) {

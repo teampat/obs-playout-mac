@@ -557,6 +557,11 @@
             <div class="absolute top-2 left-2 bg-dark-900/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
               ${typeIcon} ${item.type.toUpperCase()}
             </div>
+            ${item.type === 'video' && item.durationFormatted ? `
+              <div class="absolute bottom-2 right-2 bg-dark-900/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
+                ⏱️ ${item.durationFormatted}
+              </div>
+            ` : ''}
             ${isCurrentlyPlaying ? `
               <div class="absolute top-2 right-2 bg-red-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1">
                 <div class="w-2 h-2 bg-red-300 rounded-full animate-pulse"></div>
