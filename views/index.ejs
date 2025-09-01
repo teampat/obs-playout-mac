@@ -88,6 +88,24 @@
       width: 16px;
       height: 16px;
     }
+    
+    /* Screen reader only text */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    
+    /* Video player button hover effects */
+    .group:hover .icon {
+      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
+    }
   </style>
 
   <!-- SVG Icon Definitions -->
@@ -183,26 +201,35 @@
             <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 bg-blue-500 border-4 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 16px); touch-action: none;"></div>
           </div>
         </div>
-        <div class="flex items-center justify-center gap-3 mt-2 flex-wrap">
-          <button id="seekBackBtn" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px] flex items-center justify-center gap-2">
-            <svg class="icon icon-sm"><use href="#icon-rewind"></use></svg>
-            <span>-10s</span>
+        <div class="flex items-center justify-center gap-2 mt-4 flex-wrap">
+          <!-- Seek Back Button -->
+          <button id="seekBackBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek back 10 seconds">
+            <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-rewind"></use></svg>
+            <span class="sr-only">-10s</span>
           </button>
-          <button id="playPauseBtn" class="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-8 py-4 rounded-xl text-lg font-bold transition-all shadow-lg touch-manipulation min-w-[80px] min-h-[56px] flex items-center justify-center gap-2">
-            <svg id="playPauseIcon" class="icon"><use href="#icon-pause"></use></svg>
-            <span id="playPauseText">Pause</span>
+          
+          <!-- Restart Button -->
+          <button id="restartBtn" class="bg-dark-700/80 hover:bg-yellow-600 active:scale-90 text-white w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Restart video">
+            <svg class="icon group-hover:scale-110 transition-transform"><use href="#icon-restart"></use></svg>
+            <span class="sr-only">Restart</span>
           </button>
-          <button id="seekForwardBtn" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px] flex items-center justify-center gap-2">
-            <svg class="icon icon-sm"><use href="#icon-fastforward"></use></svg>
-            <span>+10s</span>
+          
+          <!-- Play/Pause Button - Larger and more prominent -->
+          <button id="playPauseBtn" class="bg-white/90 hover:bg-white active:scale-90 text-dark-900 w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-xl touch-manipulation ml-2 mr-2 group" title="Play/Pause">
+            <svg id="playPauseIcon" class="icon icon-lg group-hover:scale-110 transition-transform ml-0.5"><use href="#icon-pause"></use></svg>
+            <span id="playPauseText" class="sr-only">Pause</span>
           </button>
-          <button id="restartBtn" class="bg-gray-600 hover:bg-gray-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px] flex items-center justify-center gap-2">
-            <svg class="icon icon-sm"><use href="#icon-restart"></use></svg>
-            <span>Restart</span>
+          
+          <!-- Stop Button -->
+          <button id="stopBtn" class="bg-dark-700/80 hover:bg-red-600 active:scale-90 text-white w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Stop video">
+            <svg class="icon group-hover:scale-110 transition-transform"><use href="#icon-stop"></use></svg>
+            <span class="sr-only">Stop</span>
           </button>
-          <button id="stopBtn" class="bg-red-600 hover:bg-red-700 active:scale-95 text-white px-6 py-4 rounded-xl text-base font-bold transition-all shadow-lg touch-manipulation min-w-[70px] min-h-[56px] flex items-center justify-center gap-2">
-            <svg class="icon icon-sm"><use href="#icon-stop"></use></svg>
-            <span>Stop</span>
+          
+          <!-- Seek Forward Button -->
+          <button id="seekForwardBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek forward 10 seconds">
+            <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-fastforward"></use></svg>
+            <span class="sr-only">+10s</span>
           </button>
         </div>
       </div>
