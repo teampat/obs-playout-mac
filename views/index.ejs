@@ -201,16 +201,18 @@
       
       if (total > 0) {
         const percentage = (current / total) * 100;
-        progressBar.style.width = `${Math.min(percentage, 100)}%`;
-        
-        // Position thumb: 
-        // - At 0%: left edge (16px from left)
-        // - At 100%: right edge (16px from right)
-        // - Calculate position within container bounds
         const containerWidth = document.getElementById('progressBarContainer')?.offsetWidth || 300;
         const thumbSize = 32; // 8*4 = 32px (w-8 h-8)
+        
+        // Calculate thumb position within container bounds
         const thumbPosition = Math.max(thumbSize/2, Math.min(containerWidth - thumbSize/2, (percentage / 100) * containerWidth));
         
+        // Progress bar width extends to the right edge of the thumb
+        const thumbRightEdge = thumbPosition + thumbSize/2;
+        const progressWidth = (thumbRightEdge / containerWidth) * 100;
+        progressBar.style.width = `${Math.min(progressWidth, 100)}%`;
+        
+        // Position thumb
         if (progressThumb) {
           progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
           progressThumb.style.position = 'absolute';
@@ -218,12 +220,18 @@
         
         timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
       } else {
-        progressBar.style.width = '0%';
+        // Reset to start position (0%)
+        const containerWidth = document.getElementById('progressBarContainer')?.offsetWidth || 300;
+        const thumbSize = 32;
+        const startThumbPosition = thumbSize/2; // At left edge
+        
+        // Progress bar width extends to the center of the thumb at start position
+        const startProgressWidth = (startThumbPosition / containerWidth) * 100;
+        progressBar.style.width = `${startProgressWidth}%`;
         
         // Reset thumb to start position
         if (progressThumb) {
-          const thumbSize = 32;
-          progressThumb.style.left = `${thumbSize/2 - thumbSize/2}px`; // At left edge
+          progressThumb.style.left = `0px`; // At left edge
         }
         
         timeDisplay.textContent = '00:00 / 00:00';
@@ -1130,12 +1138,15 @@
             const progressBar = document.getElementById('progressBar');
             const progressThumb = document.getElementById('progressThumb');
             if (progressBar) {
-              progressBar.style.width = `${percentage * 100}%`;
-              
               // Update thumb position during drag
               const containerWidth = progressBarContainer.offsetWidth;
               const thumbSize = 32; // 8*4 = 32px (w-8 h-8)
               const thumbPosition = Math.max(thumbSize/2, Math.min(containerWidth - thumbSize/2, percentage * containerWidth));
+              
+              // Progress bar width extends to the right edge of the thumb
+              const thumbRightEdge = thumbPosition + thumbSize/2;
+              const progressWidth = (thumbRightEdge / containerWidth) * 100;
+              progressBar.style.width = `${Math.min(progressWidth, 100)}%`;
               
               if (progressThumb) {
                 progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
