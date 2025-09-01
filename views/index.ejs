@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title><%= title %></title>
+  <title></title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -90,7 +90,7 @@
       <h3 class="text-lg font-semibold mb-6 text-white flex items-center gap-2">
         📚 Media Library
       </h3>
-      <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div id="grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
         <!-- Media items will be inserted here -->
       </div>
       
@@ -103,10 +103,419 @@
     </section>
   </div>
 
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-dark-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">⚙️ Application Settings</h2>
+        <button id="closeSettingsBtn" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+      </div>
+      
+      <form id="settingsForm" class="space-y-4">
+        <div class="grid grid-cols-1 gap-4">
+          <!-- Media Directory -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">📁 Media Directory</label>
+            <input type="text" id="mediaDir" name="MEDIA_DIR" required
+                   class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                   placeholder="/path/to/media/folder">
+            <small class="text-gray-400 text-xs mt-1 block">Local directory where media files are stored</small>
+          </div>
+          
+          <!-- OBS Settings -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">🎥 OBS WebSocket URL</label>
+            <input type="text" id="obsUrl" name="OBS_URL" required placeholder="ws://127.0.0.1:4455"
+                   class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none">
+            <small class="text-gray-400 text-xs mt-1 block">OBS WebSocket server address</small>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">🔒 OBS Password</label>
+            <input type="password" id="obsPassword" name="OBS_PASSWORD" 
+                   class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                   placeholder="Leave blank if no password">
+            <small class="text-gray-400 text-xs mt-1 block">OBS WebSocket password (optional)</small>
+          </div>
+        </div>
+        
+        <div class="flex gap-3 pt-4">
+          <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all">
+            💾 Save Settings
+          </button>
+          <button type="button" id="cancelSettingsBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-all">
+            ❌ Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // Global state tracking
     let currentPlayingPath = null;
     let currentPlayingType = null;
+    let obsConnected = false;
+
+    // LocalStorage Settings Management
+    const LOCAL_STORAGE_KEYS = ['MEDIA_DIR', 'OBS_URL', 'OBS_PASSWORD', 'OBS_TARGET_SCENE'];
+    
+    function saveToLocalStorage(settings) {
+      LOCAL_STORAGE_KEYS.forEach(key => {
+        if (settings[key] !== undefined) {
+          localStorage.setItem(key, settings[key]);
+        }
+      });
+    }
+    
+    function loadFromLocalStorage() {
+      const settings = {};
+      LOCAL_STORAGE_KEYS.forEach(key => {
+        const value = localStorage.getItem(key);
+        if (value) {
+          settings[key] = value;
+        }
+      });
+      return settings;
+    }
+    
+    // Apply localStorage settings on page load
+    async function applyLocalStorageSettings() {
+      const localSettings = loadFromLocalStorage();
+      if (Object.keys(localSettings).length > 0) {
+        try {
+          await fetch('/api/settings/localStorage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(localSettings)
+          });
+        } catch (error) {
+          console.log('Failed to apply localStorage settings:', error);
+        }
+      }
+    }
+
+    // OBS Status Functions
+    async function checkOBSStatus() {
+      try {
+        const res = await fetch('/obs/status');
+        const data = await res.json();
+        updateOBSStatus(data.connected);
+      } catch (error) {
+        updateOBSStatus(false);
+      }
+    }
+
+    function updateOBSStatus(connected) {
+      obsConnected = connected;
+      const indicator = document.getElementById('obsIndicator');
+      const statusText = document.getElementById('obsStatusText');
+      const connectBtn = document.getElementById('obsConnectBtn');
+      const disconnectBtn = document.getElementById('obsDisconnectBtn');
+      const sceneSelector = document.getElementById('sceneSelector');
+      
+      if (connected) {
+        indicator.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse';
+        statusText.textContent = 'OBS Connected';
+        statusText.className = 'text-green-400';
+        connectBtn.classList.add('hidden');
+        disconnectBtn.classList.remove('hidden');
+        sceneSelector.classList.remove('hidden');
+        
+        // Load scenes when connected
+        loadScenes();
+      } else {
+        indicator.className = 'w-2 h-2 rounded-full bg-red-500';
+        statusText.textContent = 'OBS Disconnected';
+        statusText.className = 'text-red-400';
+        connectBtn.classList.remove('hidden');
+        connectBtn.textContent = '🔌 Connect to OBS';
+        disconnectBtn.classList.add('hidden');
+        sceneSelector.classList.add('hidden');
+        
+        // Clear scene options when disconnected
+        const targetScene = document.getElementById('targetScene');
+        if (targetScene) {
+          targetScene.innerHTML = '<option value="">Select scene...</option>';
+        }
+      }
+    }
+
+    // Connect to OBS
+    document.getElementById('obsConnectBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('obsConnectBtn');
+      const originalText = btn.textContent;
+      
+      btn.disabled = true;
+      btn.textContent = '🔄 Connecting...';
+      
+      try {
+        const res = await fetch('/obs/connect', { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.ok) {
+          showToast('✅ ' + data.message, 'success');
+          checkOBSStatus(); // Refresh status
+        } else {
+          showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+
+    // Disconnect from OBS
+    document.getElementById('obsDisconnectBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('obsDisconnectBtn');
+      const originalText = btn.textContent;
+      
+      btn.disabled = true;
+      btn.textContent = '🔄 Disconnecting...';
+      
+      try {
+        const res = await fetch('/obs/disconnect', { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.ok) {
+          showToast('✅ ' + data.message, 'success');
+          checkOBSStatus(); // Refresh status
+        } else {
+          showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+
+    // Check OBS status periodically
+    setInterval(checkOBSStatus, 5000); // Check every 5 seconds
+
+    // Scene selector change handler
+    document.getElementById('targetScene').addEventListener('change', async (e) => {
+      const selectedScene = e.target.value;
+      if (selectedScene) {
+        // Save to localStorage
+        localStorage.setItem('OBS_TARGET_SCENE', selectedScene);
+        
+        try {
+          // Update server CONFIG
+          const res = await fetch('/api/settings/localStorage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ OBS_TARGET_SCENE: selectedScene })
+          });
+          
+          const data = await res.json();
+          if (data.ok) {
+            showToast(`🎬 Target scene set to: ${selectedScene}`, 'success');
+          } else {
+            showToast('❌ Failed to update target scene on server', 'error');
+          }
+        } catch (error) {
+          console.error('Error updating target scene:', error);
+          showToast('❌ Network error updating target scene', 'error');
+        }
+      }
+    });
+
+    // Settings Modal Functions
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsForm = document.getElementById('settingsForm');
+    
+    document.getElementById('settingsBtn').addEventListener('click', async () => {
+      await loadSettings();
+      settingsModal.classList.remove('hidden');
+    });
+
+    document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+      settingsModal.classList.add('hidden');
+    });
+
+    document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+      settingsModal.classList.add('hidden');
+    });
+
+    // Close modal when clicking outside
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        settingsModal.classList.add('hidden');
+      }
+    });
+
+    // Save settings
+    settingsForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(settingsForm);
+      const settings = {};
+      
+      for (let [key, value] of formData.entries()) {
+        settings[key] = value;
+      }
+      
+      const submitBtn = settingsForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = '💾 Saving...';
+      
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+          // Save localStorage settings to browser
+          if (data.localStorageSettings) {
+            saveToLocalStorage(data.localStorageSettings);
+          }
+          
+          showToast('✅ Settings saved successfully!', 'success');
+          settingsModal.classList.add('hidden');
+          
+          // Refresh page after 2 seconds to apply new settings
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
+    });
+
+    // Settings Modal Functions
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        
+        if (data.ok) {
+          const settings = data.settings;
+          document.getElementById('mediaDir').value = settings.MEDIA_DIR || '';
+          document.getElementById('obsUrl').value = settings.OBS_URL || '';
+          document.getElementById('obsPassword').value = settings.OBS_PASSWORD || '';
+        }
+      } catch (error) {
+        showToast('❌ Failed to load settings: ' + error.message, 'error');
+      }
+    }
+
+    async function loadScenes() {
+      try {
+        const res = await fetch('/obs/scenes');
+        const data = await res.json();
+        
+        if (data.ok) {
+          const targetScene = document.getElementById('targetScene');
+          const currentValue = localStorage.getItem('OBS_TARGET_SCENE') || '';
+          
+          // Clear existing options
+          targetScene.innerHTML = '<option value="">Select scene...</option>';
+          
+          // Add "Current Scene" option
+          const currentOption = document.createElement('option');
+          currentOption.value = 'CURRENT_SCENE';
+          currentOption.textContent = `📺 Current Scene (${data.currentScene})`;
+          if (currentValue === 'CURRENT_SCENE') {
+            currentOption.selected = true;
+          }
+          targetScene.appendChild(currentOption);
+          
+          // Add scene options
+          data.scenes.forEach(scene => {
+            const option = document.createElement('option');
+            option.value = scene.name;
+            option.textContent = scene.name;
+            if (scene.name === currentValue) {
+              option.selected = true;
+            }
+            targetScene.appendChild(option);
+          });
+          
+          // Scene is already saved to localStorage, no need to update CONFIG here
+        } else {
+          console.error('Failed to load scenes:', data.error);
+        }
+      } catch (error) {
+        console.error('Error loading scenes:', error);
+      }
+    }
+
+    // Settings Modal Event Listeners
+    document.getElementById('settingsBtn').addEventListener('click', () => {
+      loadSettings();
+      document.getElementById('settingsModal').classList.remove('hidden');
+    });
+
+    document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+      document.getElementById('settingsModal').classList.add('hidden');
+    });
+
+    document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+      document.getElementById('settingsModal').classList.add('hidden');
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('settingsModal').addEventListener('click', (e) => {
+      if (e.target.id === 'settingsModal') {
+        document.getElementById('settingsModal').classList.add('hidden');
+      }
+    });
+
+    // Settings Form Submit
+    document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const settings = Object.fromEntries(formData.entries());
+      
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = '💾 Saving...';
+      
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+          showToast('✅ Settings saved successfully!', 'success');
+          document.getElementById('settingsModal').classList.add('hidden');
+          
+          // Refresh page after a short delay to apply new settings
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          showToast('❌ Failed to save settings: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
+    });
 
     async function fetchMedia(){
       const res = await fetch('/media');
@@ -252,6 +661,12 @@
     }
 
     fetchMedia();
+    
+    // Initial OBS status check
+    checkOBSStatus();
+    
+    // Apply localStorage settings on page load
+    applyLocalStorageSettings();
   </script>
 </body>
 </html>

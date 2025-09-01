@@ -34,14 +34,18 @@ const os = require("os");
 
 // =================== CONFIG ===================
 const CONFIG = {
-  MEDIA_DIR: process.env.MEDIA_DIR || "/Users/team/OBS-Media", // fallback to default
-  THUMB_CACHE: process.env.THUMB_CACHE || path.join(process.env.HOME || ".", ".cache", "obs-playout-thumbs"),
-  SERVER_PORT: Number(process.env.PORT || 3000),
+  // These will be overridden by localStorage if available
+  MEDIA_DIR: process.env.MEDIA_DIR || "/Users/team/OBS-Media",
   OBS_URL: process.env.OBS_URL || "ws://127.0.0.1:4455",
   OBS_PASSWORD: process.env.OBS_PASSWORD || "CHANGE_ME",
+  OBS_TARGET_SCENE: "Scene", // Default scene name, will be overridden by localStorage
+  
+  // These remain in .env file
+  THUMB_CACHE: process.env.THUMB_CACHE || path.join(process.env.HOME || ".", ".cache", "obs-playout-thumbs"),
+  SERVER_PORT: Number(process.env.PORT || 3000),
   OBS_VIDEO_INPUT: process.env.OBS_VIDEO_INPUT || "PlayerVideo",
   OBS_IMAGE_INPUT: process.env.OBS_IMAGE_INPUT || "PlayerImage",
-  DEFAULT_THUMB_WIDTH: 320,
+  DEFAULT_THUMB_WIDTH: Number(process.env.DEFAULT_THUMB_WIDTH || 320),
 };
 // ==============================================
 
@@ -74,11 +78,11 @@ async function connectOBS() {
     console.error("[OBS] Connect failed:", e.message);
   }
 }
-connectOBS();
+// Don't auto-connect on startup - only manual connection
 obs.on("ConnectionClosed", () => {
   obsConnected = false;
-  console.warn("[OBS] Disconnected. Will retry in 3s");
-  setTimeout(connectOBS, 3000);
+  console.warn("[OBS] Disconnected");
+  // Removed automatic retry - only manual connection now
 });
 
 // -------------- Helper utilities ---------------
@@ -199,16 +203,42 @@ async function ensureVideoSource(sourceName) {
   try {
     // Try to get the source first
     await obs.call("GetInputSettings", { inputName: sourceName });
+    console.log(`Video source ${sourceName} already exists`);
+    
+    // Check if source exists in the target scene
+    const targetScene = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || "Scene");
+    const sceneItems = await obs.call("GetSceneItemList", { sceneName: targetScene });
+    const existsInScene = sceneItems.sceneItems.some(item => item.sourceName === sourceName);
+    
+    if (!existsInScene) {
+      console.log(`Adding existing source ${sourceName} to scene ${targetScene}`);
+      await obs.call("CreateSceneItem", {
+        sceneName: targetScene,
+        sourceName: sourceName,
+        sceneItemEnabled: true
+      });
+    }
   } catch (e) {
     // Source doesn't exist, create it
-    console.log(`Creating video source: ${sourceName}`);
-    await obs.call("CreateInput", {
-      sceneName: await getCurrentScene(),
-      inputName: sourceName,
-      inputKind: "ffmpeg_source",
-      inputSettings: {},
-      sceneItemEnabled: true
-    });
+    const targetScene = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || "Scene");
+    console.log(`Creating video source: ${sourceName} in scene: ${targetScene}`);
+    try {
+      await obs.call("CreateInput", {
+        sceneName: targetScene,
+        inputName: sourceName,
+        inputKind: "ffmpeg_source",
+        inputSettings: {},
+        sceneItemEnabled: true
+      });
+      console.log(`Successfully created video source: ${sourceName}`);
+    } catch (createError) {
+      console.error(`Failed to create video source ${sourceName}:`, createError.message);
+      throw createError;
+    }
   }
 }
 
@@ -216,25 +246,66 @@ async function ensureImageSource(sourceName) {
   try {
     // Try to get the source first
     await obs.call("GetInputSettings", { inputName: sourceName });
+    console.log(`Image source ${sourceName} already exists`);
+    
+    // Check if source exists in the target scene
+    const targetScene = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || "Scene");
+    const sceneItems = await obs.call("GetSceneItemList", { sceneName: targetScene });
+    const existsInScene = sceneItems.sceneItems.some(item => item.sourceName === sourceName);
+    
+    if (!existsInScene) {
+      console.log(`Adding existing source ${sourceName} to scene ${targetScene}`);
+      await obs.call("CreateSceneItem", {
+        sceneName: targetScene,
+        sourceName: sourceName,
+        sceneItemEnabled: true
+      });
+    }
   } catch (e) {
     // Source doesn't exist, create it
-    console.log(`Creating image source: ${sourceName}`);
-    await obs.call("CreateInput", {
-      sceneName: await getCurrentScene(),
-      inputName: sourceName,
-      inputKind: "image_source",
-      inputSettings: {},
-      sceneItemEnabled: true
-    });
+    const targetScene = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || "Scene");
+    console.log(`Creating image source: ${sourceName} in scene: ${targetScene}`);
+    try {
+      await obs.call("CreateInput", {
+        sceneName: targetScene,
+        inputName: sourceName,
+        inputKind: "image_source",
+        inputSettings: {},
+        sceneItemEnabled: true
+      });
+      console.log(`Successfully created image source: ${sourceName}`);
+    } catch (createError) {
+      console.error(`Failed to create image source ${sourceName}:`, createError.message);
+      throw createError;
+    }
   }
 }
 
 async function getCurrentScene() {
   try {
+    // If CURRENT_SCENE is selected, always get the current scene from OBS
+    if (CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE') {
+      const response = await obs.call("GetCurrentProgramScene");
+      return response.currentProgramSceneName || response.sceneName;
+    }
+    
+    // Use the target scene from CONFIG first
+    if (CONFIG.OBS_TARGET_SCENE && CONFIG.OBS_TARGET_SCENE !== "Scene") {
+      return CONFIG.OBS_TARGET_SCENE;
+    }
+    
     const response = await obs.call("GetCurrentProgramScene");
     return response.currentProgramSceneName || response.sceneName;
   } catch (e) {
-    // Fallback to first scene if current scene call fails
+    // Fallback to config target scene or first scene
+    if (CONFIG.OBS_TARGET_SCENE && CONFIG.OBS_TARGET_SCENE !== "Scene" && CONFIG.OBS_TARGET_SCENE !== 'CURRENT_SCENE') {
+      return CONFIG.OBS_TARGET_SCENE;
+    }
+    
     const scenes = await obs.call("GetSceneList");
     return scenes.scenes[0]?.sceneName || "Scene";
   }
@@ -242,7 +313,10 @@ async function getCurrentScene() {
 
 async function fitToScreen(sourceName) {
   try {
-    const sceneName = await getCurrentScene();
+    const sceneName = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || await getCurrentScene());
+    console.log(`Applying fit-to-screen for ${sourceName} in scene: ${sceneName}`);
     
     // Get canvas dimensions
     const videoSettings = await obs.call("GetVideoSettings");
@@ -254,7 +328,8 @@ async function fitToScreen(sourceName) {
     const sceneItem = sceneItems.sceneItems.find(item => item.sourceName === sourceName);
     
     if (!sceneItem) {
-      console.log(`Scene item not found for source: ${sourceName}`);
+      console.log(`Scene item not found for source: ${sourceName} in scene: ${sceneName}`);
+      console.log(`Available scene items:`, sceneItems.sceneItems.map(item => item.sourceName));
       return;
     }
     
@@ -290,7 +365,11 @@ async function fitToScreen(sourceName) {
 
 async function hideSource(sourceName) {
   try {
-    const sceneName = await getCurrentScene();
+    const sceneName = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || await getCurrentScene());
+    console.log(`Hiding source ${sourceName} in scene: ${sceneName}`);
+    
     const sceneItems = await obs.call("GetSceneItemList", { sceneName });
     const sceneItem = sceneItems.sceneItems.find(item => item.sourceName === sourceName);
     
@@ -301,6 +380,8 @@ async function hideSource(sourceName) {
         sceneItemEnabled: false
       });
       console.log(`Hidden source: ${sourceName}`);
+    } else {
+      console.log(`Source ${sourceName} not found in scene ${sceneName} for hiding`);
     }
   } catch (e) {
     console.error(`Error hiding source ${sourceName}:`, e.message);
@@ -309,7 +390,11 @@ async function hideSource(sourceName) {
 
 async function showSource(sourceName) {
   try {
-    const sceneName = await getCurrentScene();
+    const sceneName = CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE' 
+      ? await getCurrentScene() 
+      : (CONFIG.OBS_TARGET_SCENE || await getCurrentScene());
+    console.log(`Showing source ${sourceName} in scene: ${sceneName}`);
+    
     const sceneItems = await obs.call("GetSceneItemList", { sceneName });
     const sceneItem = sceneItems.sceneItems.find(item => item.sourceName === sourceName);
     
@@ -320,6 +405,8 @@ async function showSource(sourceName) {
         sceneItemEnabled: true
       });
       console.log(`Shown source: ${sourceName}`);
+    } else {
+      console.log(`Source ${sourceName} not found in scene ${sceneName} for showing`);
     }
   } catch (e) {
     console.error(`Error showing source ${sourceName}:`, e.message);
@@ -332,6 +419,21 @@ app.post("/play/video", async (req, res) => {
     const filePath = String(req.body.filePath || "");
     if (!filePath.startsWith(CONFIG.MEDIA_DIR)) return res.status(400).json({ ok: false, error: "invalid path" });
     if (!obsConnected) return res.status(503).json({ ok: false, error: "OBS not connected" });
+
+    console.log(`Playing video: ${filePath}`);
+    console.log(`Target scene: ${CONFIG.OBS_TARGET_SCENE}`);
+
+    // Switch to target scene first (skip if CURRENT_SCENE is selected)
+    if (CONFIG.OBS_TARGET_SCENE && CONFIG.OBS_TARGET_SCENE !== 'CURRENT_SCENE') {
+      try {
+        await obs.call("SetCurrentProgramScene", { sceneName: CONFIG.OBS_TARGET_SCENE });
+        console.log(`Switched to scene: ${CONFIG.OBS_TARGET_SCENE}`);
+      } catch (sceneError) {
+        console.error(`Failed to switch to scene ${CONFIG.OBS_TARGET_SCENE}:`, sceneError.message);
+      }
+    } else if (CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE') {
+      console.log(`Using current scene (no switch needed)`);
+    }
 
     // Ensure video source exists
     await ensureVideoSource(CONFIG.OBS_VIDEO_INPUT);
@@ -348,6 +450,7 @@ app.post("/play/video", async (req, res) => {
       });
     } catch (e) {
       // Ignore error if already stopped
+      console.log("Video was already stopped or not playing");
     }
 
     await obs.call("SetInputSettings", {
@@ -365,8 +468,10 @@ app.post("/play/video", async (req, res) => {
     // Apply fit-to-screen transform
     await fitToScreen(CONFIG.OBS_VIDEO_INPUT);
 
+    console.log(`Successfully started playing video: ${filePath}`);
     res.json({ ok: true });
   } catch (e) {
+    console.error("Error playing video:", e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -376,6 +481,21 @@ app.post("/show/image", async (req, res) => {
     const filePath = String(req.body.filePath || "");
     if (!filePath.startsWith(CONFIG.MEDIA_DIR)) return res.status(400).json({ ok: false, error: "invalid path" });
     if (!obsConnected) return res.status(503).json({ ok: false, error: "OBS not connected" });
+
+    console.log(`Showing image: ${filePath}`);
+    console.log(`Target scene: ${CONFIG.OBS_TARGET_SCENE}`);
+
+    // Switch to target scene first (skip if CURRENT_SCENE is selected)
+    if (CONFIG.OBS_TARGET_SCENE && CONFIG.OBS_TARGET_SCENE !== 'CURRENT_SCENE') {
+      try {
+        await obs.call("SetCurrentProgramScene", { sceneName: CONFIG.OBS_TARGET_SCENE });
+        console.log(`Switched to scene: ${CONFIG.OBS_TARGET_SCENE}`);
+      } catch (sceneError) {
+        console.error(`Failed to switch to scene ${CONFIG.OBS_TARGET_SCENE}:`, sceneError.message);
+      }
+    } else if (CONFIG.OBS_TARGET_SCENE === 'CURRENT_SCENE') {
+      console.log(`Using current scene (no switch needed)`);
+    }
 
     // Ensure image source exists
     await ensureImageSource(CONFIG.OBS_IMAGE_INPUT);
@@ -393,6 +513,7 @@ app.post("/show/image", async (req, res) => {
     // Apply fit-to-screen transform
     await fitToScreen(CONFIG.OBS_IMAGE_INPUT);
 
+    console.log(`Successfully showing image: ${filePath}`);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -408,6 +529,174 @@ app.post("/stop/all", async (req, res) => {
     await hideSource(CONFIG.OBS_IMAGE_INPUT);
 
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ------------------ OBS Connection Controls ----------------
+app.post("/obs/connect", async (req, res) => {
+  try {
+    if (obsConnected) {
+      return res.json({ ok: true, message: "Already connected to OBS" });
+    }
+    
+    await connectOBS();
+    
+    if (obsConnected) {
+      res.json({ ok: true, message: "Successfully connected to OBS" });
+    } else {
+      res.status(503).json({ ok: false, error: "Failed to connect to OBS" });
+    }
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/obs/disconnect", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.json({ ok: true, message: "Already disconnected from OBS" });
+    }
+    
+    await obs.disconnect();
+    obsConnected = false;
+    console.log("[OBS] Manually disconnected");
+    
+    res.json({ ok: true, message: "Successfully disconnected from OBS" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/obs/status", async (req, res) => {
+  res.json({ 
+    ok: true, 
+    connected: obsConnected,
+    url: CONFIG.OBS_URL 
+  });
+});
+
+app.get("/obs/scenes", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.status(503).json({ ok: false, error: "OBS not connected" });
+    }
+    
+    const scenes = await obs.call("GetSceneList");
+    const currentScene = await obs.call("GetCurrentProgramScene");
+    
+    res.json({ 
+      ok: true, 
+      scenes: scenes.scenes.map(scene => ({
+        name: scene.sceneName,
+        index: scene.sceneIndex
+      })),
+      currentScene: currentScene.currentProgramSceneName || currentScene.sceneName
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/obs/scene", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.status(503).json({ ok: false, error: "OBS not connected" });
+    }
+    
+    const { sceneName } = req.body;
+    if (!sceneName) {
+      return res.status(400).json({ ok: false, error: "Scene name is required" });
+    }
+    
+    // Update CONFIG with the new target scene
+    CONFIG.OBS_TARGET_SCENE = sceneName;
+    
+    // Only switch scene if it's not CURRENT_SCENE
+    if (sceneName !== 'CURRENT_SCENE') {
+      await obs.call("SetCurrentProgramScene", { sceneName });
+      res.json({ ok: true, message: `Switched to scene: ${sceneName}` });
+    } else {
+      res.json({ ok: true, message: `Target set to current scene` });
+    }
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ------------------ Settings API ----------------
+app.get("/api/settings", async (req, res) => {
+  res.json({
+    ok: true,
+    settings: {
+      MEDIA_DIR: CONFIG.MEDIA_DIR,
+      OBS_URL: CONFIG.OBS_URL,
+      OBS_PASSWORD: CONFIG.OBS_PASSWORD
+    },
+    storageInfo: {
+      localStorage: ['MEDIA_DIR', 'OBS_URL', 'OBS_PASSWORD', 'OBS_TARGET_SCENE'],
+      envFile: ['PORT', 'DEFAULT_THUMB_WIDTH', 'OBS_VIDEO_INPUT', 'OBS_IMAGE_INPUT']
+    }
+  });
+});
+
+app.post("/api/settings/localStorage", async (req, res) => {
+  try {
+    const localStorageSettings = req.body;
+    
+    // Update CONFIG with localStorage settings
+    if (localStorageSettings.MEDIA_DIR) CONFIG.MEDIA_DIR = localStorageSettings.MEDIA_DIR;
+    if (localStorageSettings.OBS_URL) CONFIG.OBS_URL = localStorageSettings.OBS_URL;
+    if (localStorageSettings.OBS_PASSWORD) CONFIG.OBS_PASSWORD = localStorageSettings.OBS_PASSWORD;
+    if (localStorageSettings.OBS_TARGET_SCENE) CONFIG.OBS_TARGET_SCENE = localStorageSettings.OBS_TARGET_SCENE;
+    
+    res.json({ ok: true, message: "localStorage settings applied" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/api/settings", async (req, res) => {
+  try {
+    const newSettings = req.body;
+    
+    // Validate required fields
+    if (!newSettings.MEDIA_DIR || !newSettings.OBS_URL) {
+      return res.status(400).json({ ok: false, error: "MEDIA_DIR and OBS_URL are required" });
+    }
+    
+    // Update CONFIG object with localStorage settings only
+    if (newSettings.MEDIA_DIR) CONFIG.MEDIA_DIR = newSettings.MEDIA_DIR;
+    if (newSettings.OBS_URL) CONFIG.OBS_URL = newSettings.OBS_URL;
+    if (newSettings.OBS_PASSWORD) CONFIG.OBS_PASSWORD = newSettings.OBS_PASSWORD;
+    if (newSettings.OBS_TARGET_SCENE) CONFIG.OBS_TARGET_SCENE = newSettings.OBS_TARGET_SCENE;
+    
+    // Return localStorage settings for frontend to store
+    const localStorageSettings = {
+      MEDIA_DIR: CONFIG.MEDIA_DIR,
+      OBS_URL: CONFIG.OBS_URL,
+      OBS_PASSWORD: CONFIG.OBS_PASSWORD
+    };
+    
+    // If OBS settings changed, disconnect current connection
+    if (newSettings.OBS_URL || newSettings.OBS_PASSWORD) {
+      try {
+        if (obsConnected) {
+          await obs.disconnect();
+          obsConnected = false;
+          console.log("[OBS] Disconnected due to settings change");
+        }
+      } catch (e) {
+        console.log("OBS disconnect:", e.message);
+      }
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: "Settings updated successfully",
+      localStorageSettings: localStorageSettings
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
