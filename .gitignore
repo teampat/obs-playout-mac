@@ -57,6 +57,9 @@ pids/
 # Thumbnail cache
 .cache/obs-playout-thumbs/
 
+# Views (uncomment if you don't want to track HTML templates)
+# views/
+
 # Temporary files
 tmp/
 temp/

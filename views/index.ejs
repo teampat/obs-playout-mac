@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              50: '#f8fafc',
+              100: '#f1f5f9',
+              200: '#e2e8f0',
+              300: '#cbd5e1',
+              400: '#94a3b8',
+              500: '#64748b',
+              600: '#475569',
+              700: '#334155',
+              800: '#1e293b',
+              900: '#0f172a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom animations and touch optimizations */
+    .animate-press {
+      transition: transform 0.1s ease;
+    }
+    .animate-press:active {
+      transform: scale(0.95);
+    }
+    
+    /* Smooth transitions */
+    * {
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+    
+    /* Loading animation */
+    .loading-spin {
+      animation: spin 1s linear infinite;
+    }
+    
+    .border-3 {
+      border-width: 3px;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .animate-pulse {
+      animation: pulse 1.5s infinite;
+    }
+    
+    /* Card hover effects */
+    .bg-dark-750 {
+      background-color: rgb(41 50 65);
+    }
+  </style>
+</head>
+<body class="dark bg-dark-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-6 max-w-7xl">
+    <%- include('partials/header') %>
+
+    <!-- OBS Controls Section -->
+    <section class="mb-8">
+      <h3 class="text-lg font-semibold mb-4 text-white flex items-center gap-2">
+        🎛️ OBS Controls
+      </h3>
+      <button id="stopAllBtn" class="animate-press bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-lg text-base min-h-12 transition-all touch-manipulation">
+        ⏹ Stop All Sources
+      </button>
+    </section>
+
+    <!-- Library Section -->
+    <section>
+      <h3 class="text-lg font-semibold mb-6 text-white flex items-center gap-2">
+        📚 Media Library
+      </h3>
+      <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <!-- Media items will be inserted here -->
+      </div>
+      
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden text-center py-12">
+        <div class="text-6xl mb-4">📂</div>
+        <h3 class="text-xl font-medium text-dark-300 mb-2">No media files found</h3>
+        <p class="text-dark-400">Add video or image files to your media directory to get started.</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Global state tracking
+    let currentPlayingPath = null;
+    let currentPlayingType = null;
+
+    async function fetchMedia(){
+      const res = await fetch('/media');
+      const data = await res.json();
+      const grid = document.getElementById('grid');
+      const emptyState = document.getElementById('emptyState');
+      
+      grid.innerHTML = '';
+      
+      if (!data.items || data.items.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      
+      emptyState.classList.add('hidden');
+      
+      for(const item of data.items){
+        const div = document.createElement('div');
+        const isCurrentlyPlaying = currentPlayingPath === item.path;
+        
+        let cardClasses = 'bg-dark-800 border-2 rounded-2xl p-4 cursor-pointer transition-all transform touch-manipulation';
+        
+        if (isCurrentlyPlaying) {
+          cardClasses += ' border-green-500 bg-green-900/20';
+        } else {
+          cardClasses += ' border-dark-700 hover:border-blue-500 hover:bg-dark-750 hover:scale-105';
+        }
+        
+        div.className = cardClasses;
+        div.setAttribute('data-act', item.type === 'video' ? 'play' : 'show');
+        div.setAttribute('data-path', item.path);
+        div.setAttribute('data-type', item.type);
+        
+        const typeIcon = item.type === 'video' ? '🎬' : '🖼️';
+        const statusText = isCurrentlyPlaying 
+          ? (item.type === 'video' ? '▶️ Now Playing' : '🖼️ Currently Shown')
+          : (item.type === 'video' ? 'Click to Play Video' : 'Click to Show Image');
+        const statusColor = isCurrentlyPlaying ? 'text-green-400' : 'text-blue-400';
+        
+        div.innerHTML = `
+          <div class="relative mb-4">
+            <img class="w-full h-44 object-cover rounded-xl bg-dark-700" src="${item.url}" alt="thumbnail" loading="lazy"/>
+            <div class="absolute top-2 left-2 bg-dark-900/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
+              ${typeIcon} ${item.type.toUpperCase()}
+            </div>
+            ${isCurrentlyPlaying ? `
+              <div class="absolute top-2 right-2 bg-green-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1">
+                <div class="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+                LIVE
+              </div>
+            ` : ''}
+          </div>
+          <div class="text-center">
+            <h4 class="text-white font-medium text-sm mb-1 truncate" title="${item.filename}">${item.filename}</h4>
+            <p class="${statusColor} text-xs font-medium">${statusText}</p>
+          </div>
+        `;
+        grid.appendChild(div);
+      }
+    }
+
+    // Use event delegation on the parent grid (only set once)
+    document.getElementById('grid').addEventListener('click', async (e)=>{
+      const card = e.target.closest('[data-act]');
+      if(!card) return;
+      
+      // Prevent double clicks
+      if(card.classList.contains('processing')) return;
+      
+      card.classList.add('processing');
+      
+      const filePath = card.getAttribute('data-path');
+      const act = card.getAttribute('data-act');
+      const endpoint = act==='play' ? '/play/video' : '/show/image';
+      
+      try {
+        const res = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ filePath }) });
+        const j = await res.json();
+        if(!j.ok) {
+          showToast('❌ Failed: ' + (j.error || 'unknown'), 'error');
+        } else {
+          // Update current playing state
+          currentPlayingPath = filePath;
+          currentPlayingType = card.getAttribute('data-type');
+          
+          // Immediately refresh to show new states
+          fetchMedia(); // Refresh to update all cards with current playing state
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        card.classList.remove('processing');
+      }
+    });
+
+    document.getElementById('stopAllBtn').addEventListener('click', async ()=>{
+      const btn = document.getElementById('stopAllBtn');
+      
+      // Prevent double clicks
+      if(btn.disabled) return;
+      btn.disabled = true;
+      
+      try {
+        const res = await fetch('/stop/all', { method:'POST' });
+        const j = await res.json();
+        if(!j.ok) {
+          showToast('❌ Failed: ' + (j.error || 'unknown'), 'error');
+        } else {
+          // Clear current playing state
+          currentPlayingPath = null;
+          currentPlayingType = null;
+          
+          // Immediately refresh to update all cards (remove green borders)
+          fetchMedia();
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Toast notification system
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg font-medium text-sm transition-all transform translate-x-full opacity-0 ${
+        type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+      }`;
+      toast.textContent = message;
+      
+      document.body.appendChild(toast);
+      
+      // Animate in
+      setTimeout(() => {
+        toast.classList.remove('translate-x-full', 'opacity-0');
+      }, 100);
+      
+      // Animate out after 3 seconds
+      setTimeout(() => {
+        toast.classList.add('translate-x-full', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    fetchMedia();
+  </script>
+</body>
+</html>

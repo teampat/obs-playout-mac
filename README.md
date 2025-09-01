@@ -1,9 +1,12 @@
 # OBS Playout Web App (Mac, single-file)
 
 Features
+- Modern web interface with EJS templating
 - Upload video/image to a single media directory
 - List with thumbnails (ffmpeg for video, sharp for images)
 - Play video / show image on OBS via obs-websocket
+- Touch-friendly dark theme interface
+- Real-time active state indicators
 
 ## Prereqs
 - macOS with OBS 28+ (WebSocket enabled)
