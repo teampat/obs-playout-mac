@@ -903,14 +903,6 @@
         
         const data = await res.json();
         if (data.ok) {
-          if (requestAction === 'restart') {
-            showToast('▶️ Video started', 'success');
-          } else if (requestAction === 'play') {
-            showToast('▶️ Video resumed', 'success');
-          } else {
-            showToast('⏸️ Video paused', 'success');
-          }
-          
           // Immediate progress check to update button state
           setTimeout(checkVideoProgress, 200);
         } else {
@@ -938,7 +930,6 @@
         
         const data = await res.json();
         if (data.ok) {
-          showToast('🔄 Video restarted', 'success');
           // Immediate progress check to update display
           setTimeout(checkVideoProgress, 200);
         } else {
@@ -967,8 +958,6 @@
         
         const data = await res.json();
         if (data.ok) {
-          showToast('⏹️ Video stopped', 'success');
-          
           // Clear current playing state
           currentPlayingPath = null;
           currentPlayingType = null;
