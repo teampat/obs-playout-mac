@@ -1,0 +1,16 @@
+{
+  "name": "obs-playout-mac",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "express": "^4.19.2",
+    "mime": "^4.0.4",
+    "obs-websocket-js": "^5.0.6",
+    "sharp": "^0.33.4"
+  }
+}
