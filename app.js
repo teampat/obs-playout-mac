@@ -754,6 +754,30 @@ app.post("/obs/control", async (req, res) => {
   }
 });
 
+// Seek video to specific time
+app.post("/obs/seek", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.status(503).json({ ok: false, error: "OBS not connected" });
+    }
+    
+    const { timeMs } = req.body;
+    
+    if (typeof timeMs !== 'number' || timeMs < 0) {
+      return res.status(400).json({ ok: false, error: "Invalid time value" });
+    }
+    
+    await obs.call("SetMediaInputCursor", {
+      inputName: CONFIG.OBS_VIDEO_INPUT,
+      mediaCursor: timeMs
+    });
+    
+    res.json({ ok: true, message: `Seeked to ${Math.floor(timeMs/1000)}s` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Seek to specific time in video
 app.post("/obs/seek", async (req, res) => {
   try {
