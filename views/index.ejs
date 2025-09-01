@@ -840,6 +840,9 @@
             const videoName = card.querySelector('h4').textContent;
             document.getElementById('currentVideoName').textContent = videoName;
             checkVideoProgress(); // Immediate check
+          } else {
+            // Hide progress bar for non-video content (images, etc.)
+            stopProgressTracking();
           }
           
           // Immediately refresh to show new states
