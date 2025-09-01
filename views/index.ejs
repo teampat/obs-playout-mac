@@ -313,7 +313,11 @@
           
           const data = await res.json();
           if (data.ok) {
-            showToast(`🎬 Target scene set to: ${selectedScene}`, 'success');
+            if (selectedScene === 'CURRENT_SCENE') {
+              showToast('🎬 Target scene set to: Current Scene', 'success');
+            } else {
+              showToast(`🎬 Target scene set to: ${selectedScene}`, 'success');
+            }
           } else {
             showToast('❌ Failed to update target scene on server', 'error');
           }
