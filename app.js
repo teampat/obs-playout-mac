@@ -685,6 +685,99 @@ app.get("/obs/status", async (req, res) => {
   });
 });
 
+// Get video progress/playback status
+app.get("/obs/progress", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.status(503).json({ ok: false, error: "OBS not connected" });
+    }
+    
+    // Get media state
+    const mediaState = await obs.call("GetMediaInputStatus", {
+      inputName: CONFIG.OBS_VIDEO_INPUT
+    });
+    
+    res.json({
+      ok: true,
+      mediaState: mediaState.mediaState,
+      mediaDuration: mediaState.mediaDuration || 0,
+      mediaCursor: mediaState.mediaCursor || 0,
+      playing: mediaState.mediaState === "OBS_MEDIA_STATE_PLAYING"
+    });
+  } catch (e) {
+    // Source might not exist or be playing
+    res.json({
+      ok: true,
+      mediaState: "OBS_MEDIA_STATE_NONE",
+      mediaDuration: 0,
+      mediaCursor: 0,
+      playing: false
+    });
+  }
+});
+
+// Control video playback
+app.post("/obs/control", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.status(503).json({ ok: false, error: "OBS not connected" });
+    }
+    
+    const { action } = req.body;
+    
+    let mediaAction;
+    switch (action) {
+      case 'play':
+        mediaAction = "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PLAY";
+        break;
+      case 'pause':
+        mediaAction = "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PAUSE";
+        break;
+      case 'restart':
+        mediaAction = "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART";
+        break;
+      case 'stop':
+        mediaAction = "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP";
+        break;
+      default:
+        return res.status(400).json({ ok: false, error: "Invalid action" });
+    }
+    
+    await obs.call("TriggerMediaInputAction", {
+      inputName: CONFIG.OBS_VIDEO_INPUT,
+      mediaAction: mediaAction
+    });
+    
+    res.json({ ok: true, message: `Video ${action} successfully` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Seek to specific time in video
+app.post("/obs/seek", async (req, res) => {
+  try {
+    if (!obsConnected) {
+      return res.status(503).json({ ok: false, error: "OBS not connected" });
+    }
+    
+    const { timeMs } = req.body;
+    
+    if (typeof timeMs !== 'number' || timeMs < 0) {
+      return res.status(400).json({ ok: false, error: "Invalid time value" });
+    }
+    
+    await obs.call("SetMediaInputCursor", {
+      inputName: CONFIG.OBS_VIDEO_INPUT,
+      mediaCursor: timeMs
+    });
+    
+    res.json({ ok: true, message: `Seeked to ${Math.floor(timeMs/1000)} seconds` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/obs/scenes", async (req, res) => {
   try {
     if (!obsConnected) {

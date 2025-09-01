@@ -80,6 +80,26 @@
       <h3 class="text-lg font-semibold mb-4 text-white flex items-center gap-2">
         🎛️ OBS Controls
       </h3>
+      
+      <!-- Video Progress Bar -->
+      <div id="progressContainer" class="hidden mb-4 bg-dark-800 border border-dark-700 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span id="currentVideoName" class="text-white font-medium text-sm">No video playing</span>
+          <span id="timeDisplay" class="text-gray-400 text-sm">00:00 / 00:00</span>
+        </div>
+        <div class="w-full bg-dark-700 rounded-full h-2 mb-2 cursor-pointer relative hover:h-3 transition-all duration-200" id="progressBarContainer">
+          <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300 hover:h-3" style="width: 0%"></div>
+        </div>
+        <div class="flex items-center justify-center gap-3">
+          <button id="playPauseBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
+            ⏸️ Pause
+          </button>
+          <button id="restartBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
+            🔄 Restart
+          </button>
+        </div>
+      </div>
+      
       <button id="stopAllBtn" class="animate-press bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-lg text-base min-h-12 transition-all touch-manipulation">
         ⏹ Stop All Sources
       </button>
@@ -156,6 +176,135 @@
     let currentPlayingPath = null;
     let currentPlayingType = null;
     let obsConnected = false;
+    let progressInterval = null;
+    let currentVideoInfo = null;
+
+    // Progress tracking functions
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return "00:00";
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function updateProgressBar(current, total) {
+      const progressBar = document.getElementById('progressBar');
+      const timeDisplay = document.getElementById('timeDisplay');
+      
+      if (total > 0) {
+        const percentage = (current / total) * 100;
+        progressBar.style.width = `${Math.min(percentage, 100)}%`;
+        timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
+      } else {
+        progressBar.style.width = '0%';
+        timeDisplay.textContent = '00:00 / 00:00';
+      }
+    }
+
+    async function checkVideoProgress() {
+      if (!obsConnected || currentPlayingType !== 'video') {
+        return;
+      }
+      
+      try {
+        const res = await fetch('/obs/progress');
+        const data = await res.json();
+        
+        if (data.ok) {
+          const progressContainer = document.getElementById('progressContainer');
+          const playPauseBtn = document.getElementById('playPauseBtn');
+          
+          // Show progress bar if there's any video loaded (even if not playing)
+          if (data.mediaDuration > 0) {
+            progressContainer.classList.remove('hidden');
+            
+            // Convert milliseconds to seconds
+            const currentTime = data.mediaCursor / 1000;
+            const totalTime = data.mediaDuration / 1000;
+            
+            updateProgressBar(currentTime, totalTime);
+            
+            // Update play/pause button based on state
+            if (data.mediaState === "OBS_MEDIA_STATE_PLAYING") {
+              playPauseBtn.innerHTML = "⏸️ Pause";
+              playPauseBtn.setAttribute('data-action', 'pause');
+            } else if (data.mediaState === "OBS_MEDIA_STATE_PAUSED") {
+              playPauseBtn.innerHTML = "▶️ Play";
+              playPauseBtn.setAttribute('data-action', 'play');
+            } else if (data.mediaState === "OBS_MEDIA_STATE_STOPPED") {
+              playPauseBtn.innerHTML = "▶️ Play";
+              playPauseBtn.setAttribute('data-action', 'play');
+            } else {
+              playPauseBtn.innerHTML = "▶️ Play";
+              playPauseBtn.setAttribute('data-action', 'play');
+            }
+          } else if (currentPlayingType === 'video') {
+            // Video source exists but no media loaded
+            progressContainer.classList.remove('hidden');
+            updateProgressBar(0, 0);
+            playPauseBtn.innerHTML = "▶️ Play";
+            playPauseBtn.setAttribute('data-action', 'play');
+          } else {
+            // No video playing
+            progressContainer.classList.add('hidden');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking video progress:', error);
+      }
+    }
+
+    function startProgressTracking() {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+      progressInterval = setInterval(checkVideoProgress, 1000); // Update every second
+    }
+
+    function stopProgressTracking() {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+      document.getElementById('progressContainer').classList.add('hidden');
+    }
+
+    // Progress bar click handler for seeking
+    document.getElementById('progressBarContainer').addEventListener('click', async (e) => {
+      if (!obsConnected || currentPlayingType !== 'video') {
+        return;
+      }
+      
+      try {
+        // Get current video status to know total duration
+        const res = await fetch('/obs/progress');
+        const data = await res.json();
+        
+        if (data.ok && data.mediaDuration > 0) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const percentage = clickX / rect.width;
+          const seekTimeMs = Math.floor(percentage * data.mediaDuration);
+          
+          // Seek to the clicked position
+          const seekRes = await fetch('/obs/seek', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timeMs: seekTimeMs })
+          });
+          
+          const seekData = await seekRes.json();
+          if (seekData.ok) {
+            // Immediate progress check to update display
+            setTimeout(checkVideoProgress, 200);
+          } else {
+            showToast('❌ Failed to seek: ' + (seekData.error || 'unknown'), 'error');
+          }
+        }
+      } catch (error) {
+        showToast('❌ Network error during seek: ' + error.message, 'error');
+      }
+    });
 
     // LocalStorage Settings Management
     const LOCAL_STORAGE_KEYS = ['MEDIA_DIR', 'OBS_URL', 'OBS_PASSWORD', 'OBS_TARGET_SCENE'];
@@ -224,6 +373,9 @@
         
         // Load scenes when connected
         loadScenes();
+        
+        // Start progress tracking
+        startProgressTracking();
       } else {
         indicator.className = 'w-2 h-2 rounded-full bg-red-500';
         statusText.textContent = 'OBS Disconnected';
@@ -238,6 +390,9 @@
         if (targetScene) {
           targetScene.innerHTML = '<option value="">Select scene...</option>';
         }
+        
+        // Stop progress tracking
+        stopProgressTracking();
       }
     }
 
@@ -601,6 +756,13 @@
           currentPlayingPath = filePath;
           currentPlayingType = card.getAttribute('data-type');
           
+          // If it's a video, show the video name and start progress tracking
+          if (currentPlayingType === 'video') {
+            const videoName = card.querySelector('h4').textContent;
+            document.getElementById('currentVideoName').textContent = videoName;
+            checkVideoProgress(); // Immediate check
+          }
+          
           // Immediately refresh to show new states
           fetchMedia(); // Refresh to update all cards with current playing state
         }
@@ -628,8 +790,68 @@
           currentPlayingPath = null;
           currentPlayingType = null;
           
+          // Hide progress bar
+          stopProgressTracking();
+          
           // Immediately refresh to update all cards (remove green borders)
           fetchMedia();
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Video control event listeners
+    document.getElementById('playPauseBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('playPauseBtn');
+      const action = btn.getAttribute('data-action') || 'pause';
+      
+      if (btn.disabled) return;
+      btn.disabled = true;
+      
+      try {
+        const res = await fetch('/obs/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        });
+        
+        const data = await res.json();
+        if (data.ok) {
+          // Immediate progress check to update button state
+          setTimeout(checkVideoProgress, 200);
+        } else {
+          showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
+        }
+      } catch (error) {
+        showToast('❌ Network error: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('restartBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('restartBtn');
+      
+      if (btn.disabled) return;
+      btn.disabled = true;
+      
+      try {
+        const res = await fetch('/obs/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'restart' })
+        });
+        
+        const data = await res.json();
+        if (data.ok) {
+          showToast('🔄 Video restarted', 'success');
+          // Immediate progress check to update display
+          setTimeout(checkVideoProgress, 200);
+        } else {
+          showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
         }
       } catch (error) {
         showToast('❌ Network error: ' + error.message, 'error');
@@ -674,6 +896,13 @@
     
     // Apply localStorage settings on page load
     applyLocalStorageSettings();
+    
+    // Initial progress check after page load
+    setTimeout(() => {
+      if (obsConnected) {
+        checkVideoProgress();
+      }
+    }, 1000);
   </script>
 </body>
 </html>
