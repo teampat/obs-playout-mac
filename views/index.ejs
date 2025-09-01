@@ -432,14 +432,10 @@
               console.warn('Progress bar container not found');
             }
           } else if (currentPlayingType === 'video') {
-            // Video source exists but no media loaded
+            // Video source exists but no media loaded yet - keep current button state
             showProgressBar();
             updateProgressBar(0, 0);
-            const playPauseIcon = document.getElementById('playPauseIcon');
-            const playPauseText = document.getElementById('playPauseText');
-            playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
-            playPauseText.textContent = "Start";
-            playPauseBtn.setAttribute('data-action', 'play');
+            // Don't change button state here - let it stay as set when video was selected
           } else {
             // No video playing
             stopProgressTracking();
@@ -998,6 +994,15 @@
           if (currentPlayingType === 'video') {
             const videoName = card.querySelector('h4').textContent;
             document.getElementById('currentVideoName').textContent = videoName;
+            
+            // Set button to pause state immediately when video starts playing
+            const playPauseIcon = document.getElementById('playPauseIcon');
+            const playPauseText = document.getElementById('playPauseText');
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            playPauseIcon.innerHTML = '<use href="#icon-pause"></use>';
+            playPauseText.textContent = "Pause";
+            playPauseBtn.setAttribute('data-action', 'pause');
+            
             checkVideoProgress(); // Immediate check
           } else {
             // Hide progress bar for non-video content (images, etc.)
