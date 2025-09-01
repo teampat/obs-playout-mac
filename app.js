@@ -41,12 +41,14 @@ const CONFIG = {
   OBS_TARGET_SCENE: "Scene", // Default scene name, will be overridden by localStorage
   
   // These remain in .env file
-  THUMB_CACHE: process.env.THUMB_CACHE || path.join(process.env.HOME || ".", ".cache", "obs-playout-thumbs"),
   SERVER_PORT: Number(process.env.PORT || 3000),
   OBS_VIDEO_INPUT: process.env.OBS_VIDEO_INPUT || "PlayerVideo",
   OBS_IMAGE_INPUT: process.env.OBS_IMAGE_INPUT || "PlayerImage",
   DEFAULT_THUMB_WIDTH: Number(process.env.DEFAULT_THUMB_WIDTH || 320),
 };
+
+// Set THUMB_CACHE after MEDIA_DIR is defined
+CONFIG.THUMB_CACHE = process.env.THUMB_CACHE || path.join(CONFIG.MEDIA_DIR, "thumbnails");
 // ==============================================
 
 const LIB_DIR = CONFIG.MEDIA_DIR;
@@ -106,6 +108,10 @@ async function listFilesRecursive(dir, type) {
     for (const ent of entries) {
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) {
+        // Skip thumbnails directory
+        if (ent.name === 'thumbnails') {
+          continue;
+        }
         out.push(...await listFilesRecursive(full, type));
       } else {
         if (type === "video" && isVideoFile(full)) out.push(full);

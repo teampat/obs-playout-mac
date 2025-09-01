@@ -427,18 +427,14 @@
           const targetScene = document.getElementById('targetScene');
           const currentValue = localStorage.getItem('OBS_TARGET_SCENE') || '';
           
-          // Clear existing options
-          targetScene.innerHTML = '<option value="">Select scene...</option>';
-          
-          // Add "Current Scene" option
-          const currentOption = document.createElement('option');
-          currentOption.value = 'CURRENT_SCENE';
-          currentOption.textContent = `📺 Current Scene (${data.currentScene})`;
-          if (currentValue === 'CURRENT_SCENE') {
-            currentOption.selected = true;
+          // Clear existing options and add "Current Scene" as default
+          targetScene.innerHTML = `<option value="CURRENT_SCENE">📺 Current Scene (${data.currentScene})</option>`;
+
+          // Set default selection if no saved value
+          if (!currentValue) {
+            targetScene.value = 'CURRENT_SCENE';
           }
-          targetScene.appendChild(currentOption);
-          
+
           // Add scene options
           data.scenes.forEach(scene => {
             const option = document.createElement('option');
@@ -554,10 +550,6 @@
         div.setAttribute('data-type', item.type);
         
         const typeIcon = item.type === 'video' ? '🎬' : '🖼️';
-        const statusText = isCurrentlyPlaying 
-          ? (item.type === 'video' ? '▶️ Now Playing' : '🖼️ Currently Shown')
-          : (item.type === 'video' ? 'Click to Play Video' : 'Click to Show Image');
-        const statusColor = isCurrentlyPlaying ? 'text-green-400' : 'text-blue-400';
         
         div.innerHTML = `
           <div class="relative mb-4">
@@ -566,15 +558,14 @@
               ${typeIcon} ${item.type.toUpperCase()}
             </div>
             ${isCurrentlyPlaying ? `
-              <div class="absolute top-2 right-2 bg-green-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1">
-                <div class="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+              <div class="absolute top-2 right-2 bg-red-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1">
+                <div class="w-2 h-2 bg-red-300 rounded-full animate-pulse"></div>
                 LIVE
               </div>
             ` : ''}
           </div>
           <div class="text-center">
             <h4 class="text-white font-medium text-sm mb-1 truncate" title="${item.filename}">${item.filename}</h4>
-            <p class="${statusColor} text-xs font-medium">${statusText}</p>
           </div>
         `;
         grid.appendChild(div);
@@ -668,6 +659,13 @@
     
     // Initial OBS status check
     checkOBSStatus();
+    
+    // Auto refresh scenes every 1 second when OBS is connected
+    setInterval(() => {
+      if (obsConnected) {
+        loadScenes();
+      }
+    }, 1000);
     
     // Apply localStorage settings on page load
     applyLocalStorageSettings();
