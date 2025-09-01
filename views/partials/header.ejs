@@ -20,16 +20,15 @@
     </button>
 
     <!-- Scene Selector (only show when connected) -->
-    <div id="sceneSelector" class="hidden flex items-center gap-3">
-      <label for="targetScene" class="text-sm text-gray-300 font-medium whitespace-nowrap">🎬 Scene:</label>
-      <select id="targetScene" class="px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-sm text-white focus:border-blue-500 focus:outline-none min-h-11 min-w-32 touch-manipulation">
+    <div id="sceneSelector" class="hidden">
+      <select id="targetScene" class="px-6 py-2 bg-dark-700 border border-dark-600 rounded-lg text-sm text-white focus:border-blue-500 focus:outline-none min-h-11 min-w-32 touch-manipulation" style="appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 4 5\"><path fill=\"%23ffffff\" d=\"M2 0L0 2h4zm0 5L0 3h4z\"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; background-size: 12px; padding-right: 40px;">
         <option value="">Select scene...</option>
       </select>
     </div>
 
     <!-- Settings Button -->
     <button id="settingsBtn" class="animate-press px-6 py-2 bg-gray-600 hover:bg-gray-700 border border-gray-500 rounded-lg text-sm text-white font-medium transition-all touch-manipulation min-h-11 flex items-center gap-2">
-      ⚙️ Settings
+      ⚙️ <span class="hidden md:inline">Settings</span>
     </button>
   </div>
 </header>
