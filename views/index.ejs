@@ -106,6 +106,33 @@
     .group:hover .icon {
       filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
     }
+    
+    /* Fix iOS hover state persistence */
+    @media (hover: none) and (pointer: coarse) {
+      .group:hover {
+        background-color: inherit !important;
+      }
+      
+      .bg-dark-700\/80:hover {
+        background-color: rgba(51, 65, 85, 0.8) !important;
+      }
+      
+      .hover\:bg-yellow-600:hover {
+        background-color: rgba(51, 65, 85, 0.8) !important;
+      }
+      
+      .hover\:bg-red-600:hover {
+        background-color: rgba(51, 65, 85, 0.8) !important;
+      }
+      
+      .hover\:bg-dark-600:hover {
+        background-color: rgba(51, 65, 85, 0.8) !important;
+      }
+      
+      .hover\:bg-white:hover {
+        background-color: rgba(255, 255, 255, 0.9) !important;
+      }
+    }
   </style>
 
   <!-- SVG Icon Definitions -->
@@ -1250,6 +1277,38 @@
     
     // Setup progress bar seek functionality using event delegation
     document.addEventListener('click', handleProgressBarClick);
+    
+    // Fix iOS hover state persistence
+    function resetHoverStates() {
+      // Remove any stuck hover states on iOS
+      const buttons = document.querySelectorAll('button');
+      buttons.forEach(button => {
+        button.blur(); // Remove focus
+        // Force a reflow to reset hover states
+        button.style.transform = 'scale(1)';
+        setTimeout(() => {
+          button.style.transform = '';
+        }, 10);
+      });
+    }
+    
+    // Add touch event listeners to reset hover states on iOS
+    if ('ontouchstart' in window) {
+      document.addEventListener('touchend', () => {
+        setTimeout(resetHoverStates, 100);
+      });
+      
+      // Specifically handle video control buttons
+      const videoControlButtons = document.querySelectorAll('#progressContainer button');
+      videoControlButtons.forEach(button => {
+        button.addEventListener('touchend', () => {
+          setTimeout(() => {
+            button.blur();
+            button.classList.remove('hover');
+          }, 100);
+        });
+      });
+    }
     
     // Touch drag functionality for progress bar
     let isDragging = false;
