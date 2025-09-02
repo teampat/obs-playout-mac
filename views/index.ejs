@@ -136,7 +136,7 @@
     
     /* Fix iOS progress bar background disappearing after seek */
     #progressBarContainer {
-      background-color: rgb(51 65 85) !important;
+      background-color: rgba(0, 0, 0, 0.4) !important;
       border-radius: 9999px !important;
       position: relative !important;
       overflow: hidden !important;
@@ -150,7 +150,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgb(51 65 85);
+      background-color: rgba(0, 0, 0, 0.4);
       border-radius: 9999px;
       z-index: -1;
       pointer-events: none;
@@ -269,7 +269,7 @@
 
     <!-- Video Progress Bar - Fixed Overlay -->
 
-    <div id="progressContainer" class="hidden fixed top-0 left-0 right-0 z-50 bg-dark-900/90 backdrop-blur-sm border-b border-dark-700 p-4">
+    <div id="progressContainer" class="hidden fixed top-0 left-0 right-0 z-50 bg-black/70 backdrop-blur-sm border-b border-gray-800 p-4">
       <div class="container mx-auto max-w-7xl">
         <div class="flex items-center justify-between mb-3">
           <span id="currentVideoName" class="text-white font-semibold text-base md:text-lg">No video playing</span>
@@ -1521,9 +1521,9 @@
             const progressThumb = document.getElementById('progressThumb');
             if (progressBar) {
               // Ensure container maintains its background styling (iOS fix)
-              progressBarContainer.style.backgroundColor = 'rgb(51 65 85)';
+              progressBarContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
               progressBarContainer.style.borderRadius = '9999px';
-              progressBarContainer.classList.add('bg-dark-700');
+              progressBarContainer.classList.remove('bg-dark-700');
               
               // Update thumb position during drag
               const containerWidth = progressBarContainer.offsetWidth;
@@ -1659,13 +1659,13 @@
     function reinforceProgressBarStyling() {
       const progressBarContainer = document.getElementById('progressBarContainer');
       if (progressBarContainer) {
-        progressBarContainer.style.backgroundColor = 'rgb(51 65 85)';
+        progressBarContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
         progressBarContainer.style.borderRadius = '9999px';
-        progressBarContainer.classList.add('bg-dark-700');
+        progressBarContainer.classList.remove('bg-dark-700');
         
         // Also ensure the Tailwind classes are maintained
         if (!progressBarContainer.classList.contains('w-full')) {
-          progressBarContainer.classList.add('w-full', 'bg-dark-700', 'rounded-full', 'cursor-pointer', 'relative', 'transition-all', 'duration-200', 'group');
+          progressBarContainer.classList.add('w-full', 'rounded-full', 'cursor-pointer', 'relative', 'transition-all', 'duration-200', 'group');
         }
       }
       
