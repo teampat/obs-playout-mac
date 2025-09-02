@@ -269,48 +269,79 @@
 
     <!-- Video Progress Bar - Fixed Overlay -->
 
-    <div id="progressContainer" class="hidden fixed top-0 left-0 right-0 z-50 bg-black/70 backdrop-blur-sm border-b border-gray-800 p-4">
+    <div id="progressContainer" class="hidden fixed top-0 left-0 right-0 z-50 bg-black/70 backdrop-blur-sm border-b border-gray-800 p-4 transition-all duration-300">
       <div class="container mx-auto max-w-7xl">
-        <div class="flex items-center justify-between mb-3">
-          <span id="currentVideoName" class="text-white font-semibold text-base md:text-lg">No video playing</span>
-          <span id="timeDisplay" class="text-gray-300 text-base md:text-lg font-mono">00:00 / 00:00</span>
-        </div>
-        <div class="w-full bg-dark-700 rounded-full h-6 md:h-8 mb-4 cursor-pointer relative transition-all duration-200 group" id="progressBarContainer" title="แตะเพื่อเลื่อน">
-          <div id="progressBar" class="bg-blue-600 h-6 md:h-8 rounded-full transition-all duration-300 relative" style="width: 0%">
-            <!-- Thumb - positioned at the end of progress, same height as progress bar -->
-            <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-6 h-6 md:w-8 md:h-8 bg-blue-500 border-2 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 12px); touch-action: none;"></div>
+        <!-- Collapsed State -->
+        <div id="progressCollapsed" class="hidden flex items-center justify-between">
+          <span id="currentVideoNameCollapsed" class="text-white font-semibold text-sm truncate flex-1 mr-4">No video playing</span>
+          <div class="flex items-center gap-3">
+            <div id="progressBarMini" class="w-20 bg-dark-700 rounded-full h-2 relative">
+              <div id="progressBarMiniInner" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <span id="timeDisplayCollapsed" class="text-gray-300 text-xs font-mono whitespace-nowrap">00:00</span>
+            <button id="expandBtn" class="text-gray-400 hover:text-white transition-colors p-1" title="ขยาย">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+              </svg>
+            </button>
           </div>
         </div>
-        <div class="flex items-center justify-center gap-3 mt-4 flex-wrap">
-          <!-- Seek Back Button -->
-          <button id="seekBackBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek back 10 seconds">
-            <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-rewind"></use></svg>
-            <span class="sr-only">-10s</span>
-          </button>
-          
-          <!-- Restart Button -->
-          <button id="restartBtn" class="bg-dark-700/80 hover:bg-yellow-600 active:scale-90 text-white w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Restart video">
-            <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-restart"></use></svg>
-            <span class="sr-only">Restart</span>
-          </button>
-          
-          <!-- Play/Pause Button - Larger and more prominent -->
-          <button id="playPauseBtn" class="bg-white/90 hover:bg-white active:scale-90 text-dark-900 w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-xl touch-manipulation ml-3 mr-3 group" title="Play/Pause">
-            <svg id="playPauseIcon" class="icon icon-lg group-hover:scale-110 transition-transform ml-0.5"><use href="#icon-pause"></use></svg>
-            <span id="playPauseText" class="sr-only">Pause</span>
-          </button>
-          
-          <!-- Stop Button -->
-          <button id="stopBtn" class="bg-dark-700/80 hover:bg-red-600 active:scale-90 text-white w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Stop video">
-            <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-stop"></use></svg>
-            <span class="sr-only">Stop</span>
-          </button>
-          
-          <!-- Seek Forward Button -->
-          <button id="seekForwardBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek forward 10 seconds">
-            <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-fastforward"></use></svg>
-            <span class="sr-only">+10s</span>
-          </button>
+        
+        <!-- Expanded State -->
+        <div id="progressExpanded">
+          <div class="flex items-center justify-between mb-3">
+            <span id="currentVideoName" class="text-white font-semibold text-base md:text-lg">No video playing</span>
+            <div class="flex items-center gap-3">
+              <span id="timeDisplay" class="text-gray-300 text-base md:text-lg font-mono">00:00 / 00:00</span>
+              <button id="collapseBtn" class="text-gray-400 hover:text-white transition-colors p-1" title="พับ">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          </div>
+        </div>
+        
+        <!-- Expanded State Controls -->
+        <div id="progressExpandedControls">
+          <div class="w-full bg-dark-700 rounded-full h-6 md:h-8 mb-4 cursor-pointer relative transition-all duration-200 group" id="progressBarContainer" title="แตะเพื่อเลื่อน">
+            <div id="progressBar" class="bg-blue-600 h-6 md:h-8 rounded-full transition-all duration-300 relative" style="width: 0%">
+              <!-- Thumb - positioned at the end of progress, same height as progress bar -->
+              <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-6 h-6 md:w-8 md:h-8 bg-blue-500 border-2 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 12px); touch-action: none;"></div>
+            </div>
+          </div>
+          <div class="flex items-center justify-center gap-3 mt-4 flex-wrap">
+            <!-- Seek Back Button -->
+            <button id="seekBackBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek back 10 seconds">
+              <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-rewind"></use></svg>
+              <span class="sr-only">-10s</span>
+            </button>
+            
+            <!-- Restart Button -->
+            <button id="restartBtn" class="bg-dark-700/80 hover:bg-yellow-600 active:scale-90 text-white w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Restart video">
+              <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-restart"></use></svg>
+              <span class="sr-only">Restart</span>
+            </button>
+            
+            <!-- Play/Pause Button - Larger and more prominent -->
+            <button id="playPauseBtn" class="bg-white/90 hover:bg-white active:scale-90 text-dark-900 w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-xl touch-manipulation ml-3 mr-3 group" title="Play/Pause">
+              <svg id="playPauseIcon" class="icon icon-lg group-hover:scale-110 transition-transform ml-0.5"><use href="#icon-pause"></use></svg>
+              <span id="playPauseText" class="sr-only">Pause</span>
+            </button>
+            
+            <!-- Stop Button -->
+            <button id="stopBtn" class="bg-dark-700/80 hover:bg-red-600 active:scale-90 text-white w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Stop video">
+              <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-stop"></use></svg>
+              <span class="sr-only">Stop</span>
+            </button>
+            
+            <!-- Seek Forward Button -->
+            <button id="seekForwardBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek forward 10 seconds">
+              <svg class="icon icon-lg group-hover:scale-110 transition-transform"><use href="#icon-fastforward"></use></svg>
+              <span class="sr-only">+10s</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -408,6 +439,7 @@
     let progressInterval = null;
     let currentVideoInfo = null;
     let lastMediaGridState = null; // Track last media grid state to prevent unnecessary re-renders
+    let progressBarCollapsed = false; // Track progress bar collapse state
 
     // WebSocket event handlers
     socket.on('connect', () => {
@@ -512,6 +544,7 @@
     function updateCurrentPlayingDisplay(current) {
       console.log('Updating current playing display:', current);
       const currentVideoName = document.getElementById('currentVideoName');
+      const currentVideoNameCollapsed = document.getElementById('currentVideoNameCollapsed');
       
       if (current) {
         let displayText = '';
@@ -524,6 +557,7 @@
         
         console.log('Setting display text:', displayText);
         currentVideoName.textContent = displayText;
+        currentVideoNameCollapsed.textContent = displayText;
         
         // Show progress bar for videos
         if (current.type === 'video') {
@@ -532,6 +566,7 @@
       } else {
         console.log('No current playing media, setting to default text');
         currentVideoName.textContent = 'ไม่มีสื่อที่เล่นอยู่';
+        currentVideoNameCollapsed.textContent = 'ไม่มีสื่อที่เล่นอยู่';
       }
     }
 
@@ -547,6 +582,8 @@
       const progressBar = document.getElementById('progressBar');
       const progressThumb = document.getElementById('progressThumb');
       const timeDisplay = document.getElementById('timeDisplay');
+      const timeDisplayCollapsed = document.getElementById('timeDisplayCollapsed');
+      const progressBarMiniInner = document.getElementById('progressBarMiniInner');
       
       // Update last known time for seek functionality
       updateLastKnownTime(current * 1000); // Convert seconds to milliseconds
@@ -573,7 +610,13 @@
           progressThumb.style.zIndex = '10';
         }
         
+        // Update mini progress bar
+        if (progressBarMiniInner) {
+          progressBarMiniInner.style.width = `${percentage}%`;
+        }
+        
         timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
+        timeDisplayCollapsed.textContent = formatTime(current);
       } else {
         // Reset to start position (0%)
         const containerWidth = document.getElementById('progressBarContainer')?.offsetWidth || 300;
@@ -592,7 +635,13 @@
           progressThumb.style.zIndex = '10';
         }
         
+        // Reset mini progress bar
+        if (progressBarMiniInner) {
+          progressBarMiniInner.style.width = '0%';
+        }
+        
         timeDisplay.textContent = '00:00 / 00:00';
+        timeDisplayCollapsed.textContent = '00:00';
       }
     }
 
@@ -606,9 +655,46 @@
     }
 
     function showProgressBar() {
-      document.getElementById('progressContainer').classList.remove('hidden');
+      const progressContainer = document.getElementById('progressContainer');
+      progressContainer.classList.remove('hidden');
+      
+      // Apply collapse state
+      updateProgressBarLayout();
+      
       // Add body padding when progress bar is shown
+      const paddingTop = progressBarCollapsed ? '60px' : '120px';
+      document.body.style.paddingTop = paddingTop;
+    }
+
+    // Progress bar collapse/expand functions
+    function collapseProgressBar() {
+      progressBarCollapsed = true;
+      localStorage.setItem('progressBarCollapsed', 'true');
+      updateProgressBarLayout();
+      document.body.style.paddingTop = '60px';
+    }
+
+    function expandProgressBar() {
+      progressBarCollapsed = false;
+      localStorage.setItem('progressBarCollapsed', 'false');
+      updateProgressBarLayout();
       document.body.style.paddingTop = '120px';
+    }
+
+    function updateProgressBarLayout() {
+      const progressCollapsed = document.getElementById('progressCollapsed');
+      const progressExpanded = document.getElementById('progressExpanded');
+      const progressExpandedControls = document.getElementById('progressExpandedControls');
+      
+      if (progressBarCollapsed) {
+        progressCollapsed.classList.remove('hidden');
+        progressExpanded.classList.add('hidden');
+        progressExpandedControls.classList.add('hidden');
+      } else {
+        progressCollapsed.classList.add('hidden');
+        progressExpanded.classList.remove('hidden');
+        progressExpandedControls.classList.remove('hidden');
+      }
     }
 
     // Progress bar click handler for seeking - Simple and safe approach
@@ -1453,6 +1539,21 @@
     // Apply localStorage settings on page load
     applyLocalStorageSettings();
     
+    // Load progress bar collapse state from localStorage
+    const savedCollapseState = localStorage.getItem('progressBarCollapsed');
+    if (savedCollapseState === 'true') {
+      progressBarCollapsed = true;
+    }
+    
+    // Progress bar collapse/expand event listeners
+    document.getElementById('collapseBtn').addEventListener('click', () => {
+      collapseProgressBar();
+    });
+    
+    document.getElementById('expandBtn').addEventListener('click', () => {
+      expandProgressBar();
+    });
+    
     // Setup progress bar seek functionality using event delegation
     document.addEventListener('click', handleProgressBarClick);
     
@@ -1546,10 +1647,15 @@
             
             // Update time display for visual feedback
             const timeDisplay = document.getElementById('timeDisplay');
+            const timeDisplayCollapsed = document.getElementById('timeDisplayCollapsed');
             if (timeDisplay) {
               const seekTimeSeconds = Math.floor(seekTimeMs / 1000);
               const totalTimeSeconds = Math.floor(data.mediaDuration / 1000);
               timeDisplay.textContent = `${formatTime(seekTimeSeconds)} / ${formatTime(totalTimeSeconds)}`;
+            }
+            if (timeDisplayCollapsed) {
+              const seekTimeSeconds = Math.floor(seekTimeMs / 1000);
+              timeDisplayCollapsed.textContent = formatTime(seekTimeSeconds);
             }
           }
         })
