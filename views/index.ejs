@@ -136,7 +136,7 @@
     
     /* Fix iOS progress bar background disappearing after seek */
     #progressBarContainer {
-      background-color: rgba(0, 0, 0, 0.4) !important;
+      background-color: rgba(75, 85, 99, 0.4) !important; /* gray-600/40 */
       border-radius: 9999px !important;
       position: relative !important;
       overflow: hidden !important;
@@ -150,7 +150,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.4);
+      background-color: rgba(75, 85, 99, 0.4); /* gray-600/40 */
       border-radius: 9999px;
       z-index: -1;
       pointer-events: none;
@@ -159,14 +159,14 @@
     /* Ensure progress bar styling is maintained on touch devices */
     @media (hover: none) and (pointer: coarse) {
       #progressBarContainer {
-        background-color: rgb(51 65 85) !important;
+        background-color: rgba(75, 85, 99, 0.4) !important; /* gray-600/40 */
         -webkit-appearance: none !important;
         appearance: none !important;
         -webkit-tap-highlight-color: transparent !important;
       }
       
       #progressBarContainer::before {
-        background-color: rgb(51 65 85) !important;
+        background-color: rgba(75, 85, 99, 0.4) !important; /* gray-600/40 */
       }
     }
     
@@ -275,8 +275,8 @@
         <div id="progressCollapsed" class="hidden flex items-center justify-between">
           <span id="currentVideoNameCollapsed" class="text-white font-semibold text-sm truncate flex-1 mr-4">No video playing</span>
           <div class="flex items-center gap-3">
-            <div id="progressBarMini" class="w-20 bg-dark-700 rounded-full h-2 relative">
-              <div id="progressBarMiniInner" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            <div id="progressBarMini" class="w-20 bg-gray-600/40 rounded-full h-2 relative">
+              <div id="progressBarMiniInner" class="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
             <span id="timeDisplayCollapsed" class="text-gray-300 text-xs font-mono whitespace-nowrap">00:00</span>
             <button id="expandBtn" class="text-gray-400 hover:text-white transition-colors p-1" title="ขยาย">
@@ -300,17 +300,16 @@
               </button>
             </div>
           </div>
-          </div>
         </div>
         
         <!-- Expanded State Controls -->
         <div id="progressExpandedControls">
-          <div class="w-full bg-dark-700 rounded-full h-6 md:h-8 mb-4 cursor-pointer relative transition-all duration-200 group" id="progressBarContainer" title="แตะเพื่อเลื่อน">
-            <div id="progressBar" class="bg-blue-600 h-6 md:h-8 rounded-full transition-all duration-300 relative" style="width: 0%">
-              <!-- Thumb - positioned at the end of progress, same height as progress bar -->
-              <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-6 h-6 md:w-8 md:h-8 bg-blue-500 border-2 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 12px); touch-action: none;"></div>
-            </div>
+          <div class="w-full bg-gray-600/40 rounded-full h-6 md:h-8 mb-4 cursor-pointer relative transition-all duration-200 group" id="progressBarContainer" title="แตะเพื่อเลื่อน">
+          <div id="progressBar" class="bg-gradient-to-r from-purple-500 to-pink-500 h-6 md:h-8 rounded-full transition-all duration-300 relative shadow-lg" style="width: 0%">
+            <!-- Thumb - positioned at the end of progress, same height as progress bar -->
+            <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-6 h-6 md:w-8 md:h-8 bg-white border-2 border-purple-400 rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 12px); touch-action: none;"></div>
           </div>
+        </div>
           <div class="flex items-center justify-center gap-3 mt-4 flex-wrap">
             <!-- Seek Back Button -->
             <button id="seekBackBtn" class="bg-dark-700/80 hover:bg-dark-600 active:scale-90 text-white w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg touch-manipulation backdrop-blur-sm border border-dark-600 group" title="Seek back 10 seconds">
@@ -584,6 +583,13 @@
       const timeDisplay = document.getElementById('timeDisplay');
       const timeDisplayCollapsed = document.getElementById('timeDisplayCollapsed');
       const progressBarMiniInner = document.getElementById('progressBarMiniInner');
+      
+      // Ensure progress bar container has correct background color
+      const progressBarContainer = document.getElementById('progressBarContainer');
+      if (progressBarContainer) {
+        progressBarContainer.style.backgroundColor = 'rgba(75, 85, 99, 0.4)'; // gray-600/40
+        progressBarContainer.style.borderRadius = '9999px';
+      }
       
       // Update last known time for seek functionality
       updateLastKnownTime(current * 1000); // Convert seconds to milliseconds
@@ -1621,10 +1627,14 @@
             const progressBar = document.getElementById('progressBar');
             const progressThumb = document.getElementById('progressThumb');
             if (progressBar) {
-              // Ensure container maintains its background styling (iOS fix)
-              progressBarContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+              // Ensure container maintains its new background styling with gray color
+              progressBarContainer.style.backgroundColor = 'rgba(75, 85, 99, 0.4)'; // gray-600/40
               progressBarContainer.style.borderRadius = '9999px';
               progressBarContainer.classList.remove('bg-dark-700');
+              
+              // Ensure progress bar has gradient styling
+              progressBar.style.background = 'linear-gradient(to right, #a855f7, #ec4899)'; // purple-500 to pink-500
+              progressBar.style.borderRadius = '9999px';
               
               // Update thumb position during drag
               const containerWidth = progressBarContainer.offsetWidth;
@@ -1642,6 +1652,9 @@
                 progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
                 progressThumb.style.position = 'absolute';
                 progressThumb.style.zIndex = '10';
+                progressThumb.style.backgroundColor = '#ffffff';
+                progressThumb.style.borderColor = '#c084fc'; // purple-400
+                progressThumb.style.borderWidth = '2px';
               }
             }
             
@@ -1765,7 +1778,8 @@
     function reinforceProgressBarStyling() {
       const progressBarContainer = document.getElementById('progressBarContainer');
       if (progressBarContainer) {
-        progressBarContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+        // Apply consistent gray background color for all platforms
+        progressBarContainer.style.backgroundColor = 'rgba(75, 85, 99, 0.4)'; // gray-600/40
         progressBarContainer.style.borderRadius = '9999px';
         progressBarContainer.classList.remove('bg-dark-700');
         
@@ -1775,18 +1789,37 @@
         }
       }
       
-      // Ensure thumb z-index is maintained
+      // Ensure progress bar has gradient styling
+      const progressBar = document.getElementById('progressBar');
+      if (progressBar) {
+        progressBar.style.background = 'linear-gradient(to right, #a855f7, #ec4899)'; // purple-500 to pink-500
+        progressBar.style.zIndex = '1';
+        progressBar.style.position = 'relative';
+        progressBar.style.borderRadius = '9999px';
+        progressBar.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+      }
+      
+      // Ensure thumb styling with new colors
       const progressThumb = document.getElementById('progressThumb');
       if (progressThumb) {
         progressThumb.style.zIndex = '10';
         progressThumb.style.position = 'absolute';
+        progressThumb.style.backgroundColor = '#ffffff';
+        progressThumb.style.borderColor = '#c084fc'; // purple-400
+        progressThumb.style.borderWidth = '2px';
       }
       
-      // Ensure progress bar z-index
-      const progressBar = document.getElementById('progressBar');
-      if (progressBar) {
-        progressBar.style.zIndex = '1';
-        progressBar.style.position = 'relative';
+      // Update mini progress bar
+      const progressBarMiniInner = document.getElementById('progressBarMiniInner');
+      if (progressBarMiniInner) {
+        progressBarMiniInner.style.background = 'linear-gradient(to right, #a855f7, #ec4899)'; // purple-500 to pink-500
+        progressBarMiniInner.style.borderRadius = '9999px';
+      }
+      
+      const progressBarMini = document.getElementById('progressBarMini');
+      if (progressBarMini) {
+        progressBarMini.style.backgroundColor = 'rgba(75, 85, 99, 0.4)'; // gray-600/40
+        progressBarMini.style.borderRadius = '9999px';
       }
     }
     
