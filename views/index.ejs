@@ -403,8 +403,74 @@
     let obsConnected = false;
     let progressInterval = null;
     let currentVideoInfo = null;
+    let lastMediaGridState = null; // Track last media grid state to prevent unnecessary re-renders
 
-    // Progress tracking functions
+    // Function to fetch current playing media information
+    async function fetchCurrentPlaying() {
+      try {
+        const res = await fetch('/api/current-playing');
+        const data = await res.json();
+        
+        if (data.ok && data.hasMedia) {
+          const current = data.currentPlaying;
+          
+          // Update global state
+          currentPlayingPath = current.filePath;
+          currentPlayingType = current.type;
+          
+          // Update UI to show what's currently playing
+          updateCurrentPlayingDisplay(current);
+          
+          // Refresh media grid to show active state
+          await fetchMedia();
+          
+          // If it's a video, also update progress tracking
+          if (current.type === 'video' && obsConnected) {
+            checkVideoProgress();
+          }
+        } else {
+          // No media currently playing
+          currentPlayingPath = null;
+          currentPlayingType = null;
+          hideProgressBar();
+          updateCurrentPlayingDisplay(null);
+          
+          // Refresh media grid to clear active states
+          await fetchMedia();
+        }
+      } catch (e) {
+        console.error('Error fetching current playing media:', e);
+      }
+    }
+
+    // Function to update the display of current playing media
+    function updateCurrentPlayingDisplay(current) {
+      console.log('Updating current playing display:', current);
+      const currentVideoName = document.getElementById('currentVideoName');
+      
+      if (current) {
+        let displayText = '';
+        if (current.type === 'video') {
+          displayText = `🎬 ${current.filename}`;
+          if (current.durationFormatted) {
+            displayText += ` (${current.durationFormatted})`;
+          }
+        } else if (current.type === 'image') {
+          displayText = `🖼️ ${current.filename}`;
+        }
+        
+        console.log('Setting display text:', displayText);
+        currentVideoName.textContent = displayText;
+        
+        // Show progress bar for videos
+        if (current.type === 'video') {
+          showProgressBar();
+        }
+      } else {
+        console.log('No current playing media, setting to default text');
+        currentVideoName.textContent = 'ไม่มีสื่อที่เล่นอยู่';
+      }
+    }    // Progress tracking functions
     function formatTime(seconds) {
       if (!seconds || isNaN(seconds)) return "00:00";
       const mins = Math.floor(seconds / 60);
@@ -509,14 +575,6 @@
               playPauseText.textContent = "Start";
               playPauseBtn.setAttribute('data-action', 'play');
             }
-            
-            // Debug: Check if progress bar container exists
-            const progressBarContainer = document.getElementById('progressBarContainer');
-            if (progressBarContainer) {
-              console.log('Progress bar container found and ready for clicks');
-            } else {
-              console.warn('Progress bar container not found');
-            }
           } else if (currentPlayingType === 'video') {
             // Video source exists but no media loaded yet - keep current button state
             showProgressBar();
@@ -526,6 +584,10 @@
             // No video playing
             stopProgressTracking();
           }
+          
+          // Update media library to sync active states with progress bar updates
+          // Use lightweight update instead of full re-render to prevent flickering
+          updateActiveStatesOnly();
         }
       } catch (error) {
         console.error('Error checking video progress:', error);
@@ -998,6 +1060,29 @@
       const grid = document.getElementById('grid');
       const emptyState = document.getElementById('emptyState');
       
+      // Create a state signature to compare with last render
+      const currentState = {
+        itemCount: data.items ? data.items.length : 0,
+        currentPlaying: currentPlayingPath,
+        items: data.items ? data.items.map(item => ({
+          path: item.path,
+          filename: item.filename
+        })) : []
+      };
+      
+      // Check if state has actually changed
+      if (lastMediaGridState && 
+          lastMediaGridState.itemCount === currentState.itemCount &&
+          lastMediaGridState.currentPlaying === currentState.currentPlaying &&
+          JSON.stringify(lastMediaGridState.items) === JSON.stringify(currentState.items)) {
+        // No changes, just update active states without full re-render
+        updateActiveStatesOnly();
+        return;
+      }
+      
+      // Store new state
+      lastMediaGridState = currentState;
+      
       grid.innerHTML = '';
       
       if (!data.items || data.items.length === 0) {
@@ -1011,7 +1096,7 @@
         const div = document.createElement('div');
         const isCurrentlyPlaying = currentPlayingPath === item.path;
         
-        let cardClasses = 'bg-dark-800 border-2 rounded-2xl p-4 cursor-pointer transition-all transform touch-manipulation';
+        let cardClasses = 'bg-dark-800 border-2 rounded-2xl p-4 cursor-pointer transition-all transform touch-manipulation relative';
         
         if (isCurrentlyPlaying) {
           cardClasses += ' border-green-500 bg-green-900/20';
@@ -1050,6 +1135,49 @@
         `;
         grid.appendChild(div);
       }
+    }
+    
+    // Function to update only active states without full re-render
+    function updateActiveStatesOnly() {
+      const grid = document.getElementById('grid');
+      const cards = grid.querySelectorAll('[data-path]');
+      
+      cards.forEach(card => {
+        const cardPath = card.getAttribute('data-path');
+        const isCurrentlyPlaying = currentPlayingPath === cardPath;
+        
+        // Update classes without full re-render
+        if (isCurrentlyPlaying) {
+          if (!card.classList.contains('border-green-500')) {
+            card.className = 'bg-dark-800 border-2 rounded-2xl p-4 cursor-pointer transition-all transform touch-manipulation relative border-green-500 bg-green-900/20';
+            
+            // Add LIVE badge if not exists
+            const liveBadge = card.querySelector('.bg-red-600\\/90');
+            if (!liveBadge) {
+              const imgContainer = card.querySelector('.relative.mb-4');
+              if (imgContainer) {
+                const liveBadgeHTML = `
+                  <div class="absolute top-2 right-2 bg-red-600/90 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1">
+                    <div class="w-2 h-2 bg-red-300 rounded-full animate-pulse"></div>
+                    LIVE
+                  </div>
+                `;
+                imgContainer.insertAdjacentHTML('beforeend', liveBadgeHTML);
+              }
+            }
+          }
+        } else {
+          if (card.classList.contains('border-green-500')) {
+            card.className = 'bg-dark-800 border-2 rounded-2xl p-4 cursor-pointer transition-all transform touch-manipulation relative border-dark-700 hover:border-blue-500 hover:bg-dark-750 hover:scale-105';
+            
+            // Remove LIVE badge
+            const liveBadge = card.querySelector('.bg-red-600\\/90');
+            if (liveBadge) {
+              liveBadge.remove();
+            }
+          }
+        }
+      });
     }
 
     // Use event delegation on the parent grid (only set once)
@@ -1095,8 +1223,8 @@
             stopProgressTracking();
           }
           
-          // Immediately refresh to show new states
-          fetchMedia(); // Refresh to update all cards with current playing state
+          // Immediately refresh to show new states  
+          fetchCurrentPlaying(); // This will update both display and refresh media grid
         }
       } catch (error) {
         showToast('❌ Network error: ' + error.message, 'error');
@@ -1147,6 +1275,8 @@
         if (data.ok) {
           // Immediate progress check to update button state
           setTimeout(checkVideoProgress, 200);
+          // Update current playing display
+          setTimeout(fetchCurrentPlaying, 300);
         } else {
           showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
         }
@@ -1174,6 +1304,8 @@
         if (data.ok) {
           // Immediate progress check to update display
           setTimeout(checkVideoProgress, 200);
+          // Update current playing display
+          setTimeout(fetchCurrentPlaying, 300);
         } else {
           showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
         }
@@ -1192,10 +1324,9 @@
       btn.disabled = true;
       
       try {
-        const res = await fetch('/obs/control', {
+        const res = await fetch('/stop/all', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'stop' })
+          headers: { 'Content-Type': 'application/json' }
         });
         
         const data = await res.json();
@@ -1204,11 +1335,11 @@
           currentPlayingPath = null;
           currentPlayingType = null;
           
-          // Hide progress bar (same as Stop All Sources)
+          // Hide progress bar
           stopProgressTracking();
           
-          // Refresh media list to remove LIVE labels
-          fetchMedia();
+          // Update current playing display and refresh media grid
+          fetchCurrentPlaying();
           
           // No need for immediate progress check since we're hiding the progress bar
         } else {
@@ -1533,6 +1664,11 @@
     
     fetchMedia();
     
+    // Fetch current playing media on startup (this will also refresh media grid if needed)
+    setTimeout(() => {
+      fetchCurrentPlaying();
+    }, 500); // Delay slightly to ensure media is loaded first
+    
     // Function to reinforce progress bar styling (iOS fix)
     function reinforceProgressBarStyling() {
       const progressBarContainer = document.getElementById('progressBarContainer');
@@ -1581,6 +1717,12 @@
         loadScenes();
       }
     }, 1000);
+    
+    // Periodic update of current playing status and progress
+    setInterval(() => {
+      fetchCurrentPlaying(); // This will update display and refresh media grid automatically
+      // Note: checkVideoProgress now also calls fetchMedia() every second, so less frequent update here
+    }, 5000); // Update every 5 seconds since checkVideoProgress handles most updates
     
     // Initial progress check after page load
     setTimeout(() => {

@@ -1,7 +1,35 @@
 /**
  * OBS Playout Web App — Mac (single-file Node.js)
  * Features:
- *  - Upload video/image → saved into local media library (single directory)
+ // -------------- OBS WebSocket ----------------
+const obs = new OBSWebSocket();
+let obsConnected = false;
+
+// Track current playing media
+let currentPlayingMedia = {
+  type: null, // 'video' or 'image'
+  filePath: null,
+  filename: null,
+  startTime: null,
+  duration: null
+};
+
+async function connectOBS() {
+  try {
+    await obs.connect(CONFIG.OBS_URL, CONFIG.OBS_PASSWORD);
+    obsConnected = true;
+    console.log("[OBS] Connected");
+  } catch (e) {
+    obsConnected = false;
+    console.error("[OBS] Connect failed:", e.message);
+  }
+}
+// Don't auto-connect on startup - only manual connection
+obs.on("ConnectionClosed", () => {
+  obsConnected = false;
+  console.warn("[OBS] Disconnected");
+  // Removed automatic retry - only manual connection now
+});mage → saved into local media library (single directory)
  *  - List library with thumbnails (ffmpeg for video, sharp for images)
  *  - Play selected clip/image on OBS via obs-websocket
  *
@@ -576,6 +604,17 @@ app.post("/play/video", async (req, res) => {
     // Apply fit-to-screen transform
     await fitToScreen(CONFIG.OBS_VIDEO_INPUT);
 
+    // Update current playing media info
+    const duration = await getVideoDuration(filePath);
+    currentPlayingMedia = {
+      type: 'video',
+      filePath: filePath,
+      filename: path.basename(filePath),
+      startTime: Date.now(),
+      duration: duration,
+      durationFormatted: formatDuration(duration)
+    };
+
     console.log(`Successfully started playing video: ${filePath}`);
     res.json({ ok: true });
   } catch (e) {
@@ -621,6 +660,15 @@ app.post("/show/image", async (req, res) => {
     // Apply fit-to-screen transform
     await fitToScreen(CONFIG.OBS_IMAGE_INPUT);
 
+    // Update current playing media info
+    currentPlayingMedia = {
+      type: 'image',
+      filePath: filePath,
+      filename: path.basename(filePath),
+      startTime: Date.now(),
+      duration: null // Images don't have duration
+    };
+
     console.log(`Successfully showing image: ${filePath}`);
     res.json({ ok: true });
   } catch (e) {
@@ -635,6 +683,15 @@ app.post("/stop/all", async (req, res) => {
     // Hide both video and image sources
     await hideSource(CONFIG.OBS_VIDEO_INPUT);
     await hideSource(CONFIG.OBS_IMAGE_INPUT);
+
+    // Clear current playing media info
+    currentPlayingMedia = {
+      type: null,
+      filePath: null,
+      filename: null,
+      startTime: null,
+      duration: null
+    };
 
     res.json({ ok: true });
   } catch (e) {
@@ -713,6 +770,49 @@ app.get("/obs/progress", async (req, res) => {
       mediaCursor: 0,
       playing: false
     });
+  }
+});
+
+// Get current playing media information
+app.get("/api/current-playing", async (req, res) => {
+  try {
+    let enhancedInfo = { ...currentPlayingMedia };
+    
+    // If we have a video playing, get additional status from OBS
+    if (currentPlayingMedia.type === 'video' && obsConnected) {
+      try {
+        const mediaStatus = await obs.call("GetMediaInputStatus", {
+          inputName: CONFIG.OBS_VIDEO_INPUT
+        });
+        
+        enhancedInfo.obsMediaState = mediaStatus.mediaState;
+        enhancedInfo.mediaDuration = mediaStatus.mediaDuration || currentPlayingMedia.duration;
+        enhancedInfo.mediaCursor = mediaStatus.mediaCursor || 0;
+        enhancedInfo.playing = mediaStatus.mediaState === "OBS_MEDIA_STATE_PLAYING";
+        
+        // Calculate elapsed time since start
+        if (currentPlayingMedia.startTime) {
+          enhancedInfo.elapsedTime = Date.now() - currentPlayingMedia.startTime;
+        }
+      } catch (e) {
+        // If we can't get OBS status, just return what we have
+        enhancedInfo.playing = false;
+        enhancedInfo.obsMediaState = "OBS_MEDIA_STATE_NONE";
+      }
+    } else if (currentPlayingMedia.type === 'image') {
+      enhancedInfo.playing = true; // Images are always "playing" when shown
+      if (currentPlayingMedia.startTime) {
+        enhancedInfo.elapsedTime = Date.now() - currentPlayingMedia.startTime;
+      }
+    }
+    
+    res.json({
+      ok: true,
+      currentPlaying: enhancedInfo,
+      hasMedia: currentPlayingMedia.type !== null
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
