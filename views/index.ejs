@@ -396,7 +396,11 @@
     </div>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script>
+    // Initialize WebSocket connection
+    const socket = io();
+    
     // Global state tracking
     let currentPlayingPath = null;
     let currentPlayingType = null;
@@ -405,42 +409,103 @@
     let currentVideoInfo = null;
     let lastMediaGridState = null; // Track last media grid state to prevent unnecessary re-renders
 
-    // Function to fetch current playing media information
-    async function fetchCurrentPlaying() {
-      try {
-        const res = await fetch('/api/current-playing');
-        const data = await res.json();
-        
-        if (data.ok && data.hasMedia) {
-          const current = data.currentPlaying;
-          
-          // Update global state
-          currentPlayingPath = current.filePath;
-          currentPlayingType = current.type;
-          
-          // Update UI to show what's currently playing
-          updateCurrentPlayingDisplay(current);
-          
-          // Refresh media grid to show active state
-          await fetchMedia();
-          
-          // If it's a video, also update progress tracking
-          if (current.type === 'video' && obsConnected) {
-            checkVideoProgress();
-          }
-        } else {
-          // No media currently playing
-          currentPlayingPath = null;
-          currentPlayingType = null;
-          hideProgressBar();
-          updateCurrentPlayingDisplay(null);
-          
-          // Refresh media grid to clear active states
-          await fetchMedia();
-        }
-      } catch (e) {
-        console.error('Error fetching current playing media:', e);
+    // WebSocket event handlers
+    socket.on('connect', () => {
+      console.log('[WebSocket] Connected to server');
+      // Request current status
+      socket.emit('requestStatus');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('[WebSocket] Disconnected from server');
+      // Update UI to show disconnected state
+      updateOBSStatus(false);
+    });
+
+    socket.on('obsStatus', (data) => {
+      console.log('[WebSocket] OBS status update:', data);
+      updateOBSStatus(data.connected);
+    });
+
+    socket.on('currentPlaying', (data) => {
+      console.log('[WebSocket] Current playing update:', data);
+      
+      // Update global state
+      currentPlayingPath = data.filePath;
+      currentPlayingType = data.type;
+      
+      // Update UI
+      updateCurrentPlayingDisplay(data);
+      
+      // Update media grid to show active states
+      updateActiveStatesOnly();
+      
+      // Handle progress bar visibility
+      if (data.type === 'video' && data.filePath) {
+        showProgressBar();
+      } else if (!data.filePath) {
+        hideProgressBar();
       }
+    });
+
+    socket.on('videoProgress', (data) => {
+      if (!obsConnected || currentPlayingType !== 'video') {
+        return;
+      }
+      
+      console.log('[WebSocket] Video progress update:', data);
+      
+      if (data.ok) {
+        const progressContainer = document.getElementById('progressContainer');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        
+        // Show progress bar if there's any video loaded (even if not playing)
+        if (data.mediaDuration > 0) {
+          showProgressBar();
+          
+          // Convert milliseconds to seconds
+          const currentTime = data.mediaCursor / 1000;
+          const totalTime = data.mediaDuration / 1000;
+          
+          updateProgressBar(currentTime, totalTime);
+          
+          // Update play/pause button based on state
+          const playPauseIcon = document.getElementById('playPauseIcon');
+          const playPauseText = document.getElementById('playPauseText');
+          
+          if (data.mediaState === "OBS_MEDIA_STATE_PLAYING") {
+            playPauseIcon.innerHTML = '<use href="#icon-pause"></use>';
+            playPauseText.textContent = "Pause";
+            playPauseBtn.setAttribute('data-action', 'pause');
+          } else if (data.mediaState === "OBS_MEDIA_STATE_PAUSED") {
+            playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
+            playPauseText.textContent = "Resume";
+            playPauseBtn.setAttribute('data-action', 'play');
+          } else if (data.mediaState === "OBS_MEDIA_STATE_STOPPED") {
+            playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
+            playPauseText.textContent = "Start";
+            playPauseBtn.setAttribute('data-action', 'play');
+          } else {
+            playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
+            playPauseText.textContent = "Start";
+            playPauseBtn.setAttribute('data-action', 'play');
+          }
+        } else if (currentPlayingType === 'video') {
+          // Video source exists but no media loaded yet - keep current button state
+          showProgressBar();
+          updateProgressBar(0, 0);
+          // Don't change button state here - let it stay as set when video was selected
+        } else {
+          // No video playing
+          hideProgressBar();
+        }
+      }
+    });
+
+    // Function to fetch current playing media information (now using WebSocket)
+    async function fetchCurrentPlaying() {
+      // This is now handled by WebSocket events, but keeping for backward compatibility
+      socket.emit('requestStatus');
     }
 
     // Function to update the display of current playing media
@@ -470,7 +535,9 @@
         console.log('No current playing media, setting to default text');
         currentVideoName.textContent = 'ไม่มีสื่อที่เล่นอยู่';
       }
-    }    // Progress tracking functions
+    }
+
+    // Progress tracking functions
     function formatTime(seconds) {
       if (!seconds || isNaN(seconds)) return "00:00";
       const mins = Math.floor(seconds / 60);
@@ -531,81 +598,10 @@
       }
     }
 
-    async function checkVideoProgress() {
-      if (!obsConnected || currentPlayingType !== 'video') {
-        return;
-      }
-      
-      try {
-        const res = await fetch('/obs/progress');
-        const data = await res.json();
-        
-        if (data.ok) {
-          const progressContainer = document.getElementById('progressContainer');
-          const playPauseBtn = document.getElementById('playPauseBtn');
-          
-          // Show progress bar if there's any video loaded (even if not playing)
-          if (data.mediaDuration > 0) {
-            showProgressBar();
-            
-            // Convert milliseconds to seconds
-            const currentTime = data.mediaCursor / 1000;
-            const totalTime = data.mediaDuration / 1000;
-            
-            updateProgressBar(currentTime, totalTime);
-            
-            // Update play/pause button based on state
-            const playPauseIcon = document.getElementById('playPauseIcon');
-            const playPauseText = document.getElementById('playPauseText');
-            
-            if (data.mediaState === "OBS_MEDIA_STATE_PLAYING") {
-              playPauseIcon.innerHTML = '<use href="#icon-pause"></use>';
-              playPauseText.textContent = "Pause";
-              playPauseBtn.setAttribute('data-action', 'pause');
-            } else if (data.mediaState === "OBS_MEDIA_STATE_PAUSED") {
-              playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
-              playPauseText.textContent = "Resume";
-              playPauseBtn.setAttribute('data-action', 'play');
-            } else if (data.mediaState === "OBS_MEDIA_STATE_STOPPED") {
-              playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
-              playPauseText.textContent = "Start";
-              playPauseBtn.setAttribute('data-action', 'play');
-            } else {
-              playPauseIcon.innerHTML = '<use href="#icon-play"></use>';
-              playPauseText.textContent = "Start";
-              playPauseBtn.setAttribute('data-action', 'play');
-            }
-          } else if (currentPlayingType === 'video') {
-            // Video source exists but no media loaded yet - keep current button state
-            showProgressBar();
-            updateProgressBar(0, 0);
-            // Don't change button state here - let it stay as set when video was selected
-          } else {
-            // No video playing
-            stopProgressTracking();
-          }
-          
-          // Update media library to sync active states with progress bar updates
-          // Use lightweight update instead of full re-render to prevent flickering
-          updateActiveStatesOnly();
-        }
-      } catch (error) {
-        console.error('Error checking video progress:', error);
-      }
-    }
+    // Note: checkVideoProgress is now handled by WebSocket events
+    // The old polling-based approach has been replaced with real-time updates
 
-    function startProgressTracking() {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
-      progressInterval = setInterval(checkVideoProgress, 1000); // Update every second
-    }
-
-    function stopProgressTracking() {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-      }
+    function hideProgressBar() {
       document.getElementById('progressContainer').classList.add('hidden');
       // Remove body padding when progress bar is hidden
       document.body.style.paddingTop = '0';
@@ -668,8 +664,8 @@
             .then(seekData => {
               console.log('Seek response:', seekData);
               if (seekData.ok) {
-                // Immediate progress check to update display
-                setTimeout(checkVideoProgress, 200);
+                // WebSocket will handle progress updates automatically
+                // No need for manual progress checks
               } else {
                 showToast('❌ Failed to seek: ' + (seekData.error || 'unknown'), 'error');
               }
@@ -726,8 +722,9 @@
       }
     }
 
-    // OBS Status Functions
+    // OBS Status Functions (now using WebSocket updates)
     async function checkOBSStatus() {
+      // This is now handled by WebSocket events, but keeping for manual checks
       try {
         const res = await fetch('/obs/status');
         const data = await res.json();
@@ -756,8 +753,7 @@
         // Load scenes when connected
         loadScenes();
         
-        // Start progress tracking
-        startProgressTracking();
+        // WebSocket now handles progress tracking automatically
       } else {
         indicator.className = 'w-2 h-2 rounded-full bg-red-500';
         statusText.textContent = 'OBS Disconnected';
@@ -773,8 +769,7 @@
           targetScene.innerHTML = '<option value="">Select scene...</option>';
         }
         
-        // Stop progress tracking
-        stopProgressTracking();
+        // WebSocket now handles progress tracking automatically
       }
     }
 
@@ -830,8 +825,9 @@
       }
     });
 
-    // Check OBS status periodically
-    setInterval(checkOBSStatus, 5000); // Check every 5 seconds
+    // OBS status is now handled by WebSocket events
+    // Keeping initial check for fallback
+    checkOBSStatus();
 
     // Scene selector change handler
     document.getElementById('targetScene').addEventListener('change', async (e) => {
@@ -1204,7 +1200,7 @@
           currentPlayingPath = filePath;
           currentPlayingType = card.getAttribute('data-type');
           
-          // If it's a video, show the video name and start progress tracking
+          // If it's a video, show the video name and update local state
           if (currentPlayingType === 'video') {
             const videoName = card.querySelector('h4').textContent;
             document.getElementById('currentVideoName').textContent = videoName;
@@ -1217,14 +1213,14 @@
             playPauseText.textContent = "Pause";
             playPauseBtn.setAttribute('data-action', 'pause');
             
-            checkVideoProgress(); // Immediate check
+            // WebSocket will handle progress updates automatically
           } else {
             // Hide progress bar for non-video content (images, etc.)
-            stopProgressTracking();
+            hideProgressBar();
           }
           
-          // Immediately refresh to show new states  
-          fetchCurrentPlaying(); // This will update both display and refresh media grid
+          // WebSocket will handle state updates automatically
+          // No need for manual refresh calls
         }
       } catch (error) {
         showToast('❌ Network error: ' + error.message, 'error');
@@ -1273,10 +1269,8 @@
         
         const data = await res.json();
         if (data.ok) {
-          // Immediate progress check to update button state
-          setTimeout(checkVideoProgress, 200);
-          // Update current playing display
-          setTimeout(fetchCurrentPlaying, 300);
+          // WebSocket will handle progress updates automatically
+          // No need for manual progress checks
         } else {
           showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
         }
@@ -1302,10 +1296,8 @@
         
         const data = await res.json();
         if (data.ok) {
-          // Immediate progress check to update display
-          setTimeout(checkVideoProgress, 200);
-          // Update current playing display
-          setTimeout(fetchCurrentPlaying, 300);
+          // WebSocket will handle progress updates automatically
+          // No need for manual progress checks
         } else {
           showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
         }
@@ -1336,12 +1328,10 @@
           currentPlayingType = null;
           
           // Hide progress bar
-          stopProgressTracking();
+          hideProgressBar();
           
-          // Update current playing display and refresh media grid
-          fetchCurrentPlaying();
-          
-          // No need for immediate progress check since we're hiding the progress bar
+          // WebSocket will handle the state updates automatically
+          // No need for manual updates
         } else {
           showToast('❌ Failed: ' + (data.error || 'unknown'), 'error');
         }
@@ -1389,8 +1379,8 @@
           // Update our tracking time immediately
           lastKnownCurrentTime = seekTimeMs;
           
-          // Update progress display
-          setTimeout(checkVideoProgress, 200);
+          // WebSocket will handle progress updates automatically
+          // No need for manual progress checks
         } else {
           showToast('❌ Failed to seek: ' + (data.error || 'unknown'), 'error');
         }
@@ -1428,8 +1418,8 @@
           // Update our tracking time immediately
           lastKnownCurrentTime = seekTimeMs;
           
-          // Update progress display
-          setTimeout(checkVideoProgress, 200);
+          // WebSocket will handle progress updates automatically
+          // No need for manual progress checks
         } else {
           showToast('❌ Failed to seek: ' + (data.error || 'unknown'), 'error');
         }
@@ -1590,19 +1580,17 @@
             reinforceProgressBarStyling();
           }, 100);
           
-          // Update progress check after seek
-          setTimeout(checkVideoProgress, 200);
+          // WebSocket will handle progress updates automatically
+          // No need for manual progress checks
         } else {
           showToast('❌ Failed to seek: ' + (seekData.error || 'unknown'), 'error');
-          // Restore original progress if seek failed
-          setTimeout(checkVideoProgress, 100);
+          // WebSocket will continue to provide current progress
         }
       })
       .catch(error => {
         console.error('Seek error:', error);
         showToast('❌ Seek error: ' + error.message, 'error');
-        // Restore original progress if seek failed
-        setTimeout(checkVideoProgress, 100);
+        // WebSocket will continue to provide current progress
       });
     }
     
@@ -1711,25 +1699,19 @@
     // Initial OBS status check
     checkOBSStatus();
     
-    // Auto refresh scenes every 1 second when OBS is connected
+    // Auto refresh scenes every 5 seconds when OBS is connected (reduced frequency since WebSocket handles real-time updates)
     setInterval(() => {
       if (obsConnected) {
         loadScenes();
       }
-    }, 1000);
+    }, 5000);
     
-    // Periodic update of current playing status and progress
-    setInterval(() => {
-      fetchCurrentPlaying(); // This will update display and refresh media grid automatically
-      // Note: checkVideoProgress now also calls fetchMedia() every second, so less frequent update here
-    }, 5000); // Update every 5 seconds since checkVideoProgress handles most updates
+    // WebSocket now handles real-time updates, no need for periodic polling
+    // Initial media load
+    fetchMedia();
     
-    // Initial progress check after page load
-    setTimeout(() => {
-      if (obsConnected) {
-        checkVideoProgress();
-      }
-    }, 1000);
+    // WebSocket handles real-time updates automatically
+    // Initial status will be received via WebSocket events
   </script>
 </body>
 </html>

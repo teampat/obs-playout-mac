@@ -1,35 +1,7 @@
 /**
  * OBS Playout Web App — Mac (single-file Node.js)
  * Features:
- // -------------- OBS WebSocket ----------------
-const obs = new OBSWebSocket();
-let obsConnected = false;
-
-// Track current playing media
-let currentPlayingMedia = {
-  type: null, // 'video' or 'image'
-  filePath: null,
-  filename: null,
-  startTime: null,
-  duration: null
-};
-
-async function connectOBS() {
-  try {
-    await obs.connect(CONFIG.OBS_URL, CONFIG.OBS_PASSWORD);
-    obsConnected = true;
-    console.log("[OBS] Connected");
-  } catch (e) {
-    obsConnected = false;
-    console.error("[OBS] Connect failed:", e.message);
-  }
-}
-// Don't auto-connect on startup - only manual connection
-obs.on("ConnectionClosed", () => {
-  obsConnected = false;
-  console.warn("[OBS] Disconnected");
-  // Removed automatic retry - only manual connection now
-});mage → saved into local media library (single directory)
+ *  - Upload video/image → saved into local media library (single directory)
  *  - List library with thumbnails (ffmpeg for video, sharp for images)
  *  - Play selected clip/image on OBS via obs-websocket
  *
@@ -55,6 +27,8 @@ const fsp = require("fs/promises");
 const path = require("path");
 const { spawn } = require("child_process");
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 const sharp = require("sharp");
 const mime = require("mime");
 const { OBSWebSocket } = require("obs-websocket-js");
@@ -88,6 +62,14 @@ const LIB_DIR = CONFIG.MEDIA_DIR;
 // })();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -98,6 +80,16 @@ app.set('views', path.join(__dirname, 'views'));
 // ---------------- OBS WebSocket ----------------
 const obs = new OBSWebSocket();
 let obsConnected = false;
+
+// Track current playing media
+let currentPlayingMedia = {
+  type: null, // 'video' or 'image'
+  filePath: null,
+  filename: null,
+  startTime: null,
+  duration: null
+};
+
 async function connectOBS() {
   try {
     await obs.connect(CONFIG.OBS_URL, CONFIG.OBS_PASSWORD);
@@ -112,8 +104,99 @@ async function connectOBS() {
 obs.on("ConnectionClosed", () => {
   obsConnected = false;
   console.warn("[OBS] Disconnected");
+  // Broadcast OBS status to all clients
+  io.emit('obsStatus', { connected: false });
   // Removed automatic retry - only manual connection now
 });
+
+obs.on("ConnectionOpened", () => {
+  obsConnected = true;
+  console.log("[OBS] Connection opened");
+  // Broadcast OBS status to all clients
+  io.emit('obsStatus', { connected: true });
+});
+
+// ---------------- WebSocket Events ----------------
+io.on('connection', (socket) => {
+  console.log('[WebSocket] Client connected:', socket.id);
+  
+  // Send current state to newly connected client
+  socket.emit('obsStatus', { connected: obsConnected });
+  socket.emit('currentPlaying', currentPlayingMedia);
+  
+  // Handle client disconnect
+  socket.on('disconnect', () => {
+    console.log('[WebSocket] Client disconnected:', socket.id);
+  });
+  
+  // Handle client requesting current status
+  socket.on('requestStatus', () => {
+    socket.emit('obsStatus', { connected: obsConnected });
+    socket.emit('currentPlaying', currentPlayingMedia);
+  });
+});
+
+// Function to broadcast current playing media to all clients
+function broadcastCurrentPlaying() {
+  io.emit('currentPlaying', currentPlayingMedia);
+}
+
+// Function to broadcast OBS status to all clients
+function broadcastOBSStatus() {
+  io.emit('obsStatus', { connected: obsConnected });
+}
+
+// Function to broadcast video progress to all clients
+async function broadcastVideoProgress() {
+  if (!obsConnected || currentPlayingMedia.type !== 'video') {
+    return;
+  }
+  
+  try {
+    const mediaState = await obs.call("GetMediaInputStatus", {
+      inputName: CONFIG.OBS_VIDEO_INPUT
+    });
+    
+    const progressData = {
+      ok: true,
+      mediaState: mediaState.mediaState,
+      mediaDuration: mediaState.mediaDuration || 0,
+      mediaCursor: mediaState.mediaCursor || 0,
+      playing: mediaState.mediaState === "OBS_MEDIA_STATE_PLAYING"
+    };
+    
+    io.emit('videoProgress', progressData);
+  } catch (error) {
+    // Source might not exist or be playing
+    io.emit('videoProgress', {
+      ok: true,
+      mediaState: "OBS_MEDIA_STATE_NONE",
+      mediaDuration: 0,
+      mediaCursor: 0,
+      playing: false
+    });
+  }
+}
+
+// Start periodic progress broadcasting
+let progressBroadcastInterval = null;
+
+function startProgressBroadcasting() {
+  if (progressBroadcastInterval) {
+    clearInterval(progressBroadcastInterval);
+  }
+  progressBroadcastInterval = setInterval(broadcastVideoProgress, 1000); // Broadcast every second
+}
+
+function stopProgressBroadcasting() {
+  if (progressBroadcastInterval) {
+    clearInterval(progressBroadcastInterval);
+    progressBroadcastInterval = null;
+  }
+}
+
+// Start broadcasting when server starts
+startProgressBroadcasting();
 
 // -------------- Helper utilities ---------------
 function isVideoFile(p) {
@@ -615,6 +698,9 @@ app.post("/play/video", async (req, res) => {
       durationFormatted: formatDuration(duration)
     };
 
+    // Broadcast the change to all connected clients
+    broadcastCurrentPlaying();
+
     console.log(`Successfully started playing video: ${filePath}`);
     res.json({ ok: true });
   } catch (e) {
@@ -669,6 +755,9 @@ app.post("/show/image", async (req, res) => {
       duration: null // Images don't have duration
     };
 
+    // Broadcast the change to all connected clients
+    broadcastCurrentPlaying();
+
     console.log(`Successfully showing image: ${filePath}`);
     res.json({ ok: true });
   } catch (e) {
@@ -693,6 +782,9 @@ app.post("/stop/all", async (req, res) => {
       duration: null
     };
 
+    // Broadcast the change to all connected clients
+    broadcastCurrentPlaying();
+
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -709,6 +801,8 @@ app.post("/obs/connect", async (req, res) => {
     await connectOBS();
     
     if (obsConnected) {
+      // Broadcast connection status to all clients
+      broadcastOBSStatus();
       res.json({ ok: true, message: "Successfully connected to OBS" });
     } else {
       res.status(503).json({ ok: false, error: "Failed to connect to OBS" });
@@ -727,6 +821,9 @@ app.post("/obs/disconnect", async (req, res) => {
     await obs.disconnect();
     obsConnected = false;
     console.log("[OBS] Manually disconnected");
+    
+    // Broadcast disconnection status to all clients
+    broadcastOBSStatus();
     
     res.json({ ok: true, message: "Successfully disconnected from OBS" });
   } catch (e) {
@@ -1037,7 +1134,7 @@ app.get("/", (req, res) => {
 });
 
 // ------------------- Start server ----------------
-app.listen(CONFIG.SERVER_PORT, '0.0.0.0', () => {
+server.listen(CONFIG.SERVER_PORT, '0.0.0.0', () => {
   console.log(`OBS Playout server running on port ${CONFIG.SERVER_PORT}`);
   console.log(`Local access: http://localhost:${CONFIG.SERVER_PORT}`);
   
