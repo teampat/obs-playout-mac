@@ -133,6 +133,59 @@
         background-color: rgba(255, 255, 255, 0.9) !important;
       }
     }
+    
+    /* Fix iOS progress bar background disappearing after seek */
+    #progressBarContainer {
+      background-color: rgb(51 65 85) !important;
+      border-radius: 9999px !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+    
+    /* Backup background layer for iOS */
+    #progressBarContainer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgb(51 65 85);
+      border-radius: 9999px;
+      z-index: -1;
+      pointer-events: none;
+    }
+    
+    /* Ensure progress bar styling is maintained on touch devices */
+    @media (hover: none) and (pointer: coarse) {
+      #progressBarContainer {
+        background-color: rgb(51 65 85) !important;
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      
+      #progressBarContainer::before {
+        background-color: rgb(51 65 85) !important;
+      }
+    }
+    
+    /* Progress bar and thumb z-index layering */
+    #progressBar {
+      z-index: 1;
+      position: relative;
+    }
+    
+    #progressThumb {
+      z-index: 10 !important;
+      position: absolute !important;
+    }
+    
+    /* Ensure thumb stays on top during interactions */
+    #progressBarContainer:active #progressThumb,
+    #progressBarContainer:hover #progressThumb {
+      z-index: 20 !important;
+    }
   </style>
 
   <!-- SVG Icon Definitions -->
@@ -224,8 +277,8 @@
         </div>
         <div class="w-full bg-dark-700 rounded-full h-6 md:h-8 mb-4 cursor-pointer relative transition-all duration-200 group" id="progressBarContainer" title="แตะเพื่อเลื่อน">
           <div id="progressBar" class="bg-blue-600 h-6 md:h-8 rounded-full transition-all duration-300 relative" style="width: 0%">
-            <!-- Thumb - positioned at the end of progress, constrained within container -->
-            <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-8 h-8 md:w-10 md:h-10 bg-blue-500 border-4 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 16px); touch-action: none;"></div>
+            <!-- Thumb - positioned at the end of progress, same height as progress bar -->
+            <div id="progressThumb" class="absolute top-1/2 -translate-y-1/2 w-6 h-6 md:w-8 md:h-8 bg-blue-500 border-2 border-white rounded-full shadow-xl opacity-100 transition-transform active:scale-90 touch-manipulation" style="left: calc(100% - 12px); touch-action: none;"></div>
           </div>
         </div>
         <div class="flex items-center justify-center gap-3 mt-4 flex-wrap">
@@ -370,7 +423,9 @@
       if (total > 0) {
         const percentage = (current / total) * 100;
         const containerWidth = document.getElementById('progressBarContainer')?.offsetWidth || 300;
-        const thumbSize = 32; // 8*4 = 32px (w-8 h-8)
+        // Match thumb size with progress bar height - responsive
+        const progressBarHeight = document.getElementById('progressBar')?.offsetHeight || 24;
+        const thumbSize = progressBarHeight; // Same as progress bar height
         
         // Calculate thumb position within container bounds
         const thumbPosition = Math.max(thumbSize/2, Math.min(containerWidth - thumbSize/2, (percentage / 100) * containerWidth));
@@ -384,13 +439,16 @@
         if (progressThumb) {
           progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
           progressThumb.style.position = 'absolute';
+          progressThumb.style.zIndex = '10';
         }
         
         timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
       } else {
         // Reset to start position (0%)
         const containerWidth = document.getElementById('progressBarContainer')?.offsetWidth || 300;
-        const thumbSize = 32;
+        // Match thumb size with progress bar height
+        const progressBarHeight = document.getElementById('progressBar')?.offsetHeight || 24;
+        const thumbSize = progressBarHeight;
         const startThumbPosition = thumbSize/2; // At left edge
         
         // Progress bar width extends to the center of the thumb at start position
@@ -400,6 +458,7 @@
         // Reset thumb to start position
         if (progressThumb) {
           progressThumb.style.left = `0px`; // At left edge
+          progressThumb.style.zIndex = '10';
         }
         
         timeDisplay.textContent = '00:00 / 00:00';
@@ -1342,9 +1401,16 @@
             const progressBar = document.getElementById('progressBar');
             const progressThumb = document.getElementById('progressThumb');
             if (progressBar) {
+              // Ensure container maintains its background styling (iOS fix)
+              progressBarContainer.style.backgroundColor = 'rgb(51 65 85)';
+              progressBarContainer.style.borderRadius = '9999px';
+              progressBarContainer.classList.add('bg-dark-700');
+              
               // Update thumb position during drag
               const containerWidth = progressBarContainer.offsetWidth;
-              const thumbSize = 32; // 8*4 = 32px (w-8 h-8)
+              // Match thumb size with progress bar height - responsive
+              const progressBarHeight = document.getElementById('progressBar')?.offsetHeight || 24;
+              const thumbSize = progressBarHeight;
               const thumbPosition = Math.max(thumbSize/2, Math.min(containerWidth - thumbSize/2, percentage * containerWidth));
               
               // Progress bar width extends to the right edge of the thumb
@@ -1355,6 +1421,7 @@
               if (progressThumb) {
                 progressThumb.style.left = `${thumbPosition - thumbSize/2}px`;
                 progressThumb.style.position = 'absolute';
+                progressThumb.style.zIndex = '10';
               }
             }
             
@@ -1387,6 +1454,11 @@
       .then(res => res.json())
       .then(seekData => {
         if (seekData.ok) {
+          // Reinforce progress bar styling after seek (iOS fix)
+          setTimeout(() => {
+            reinforceProgressBarStyling();
+          }, 100);
+          
           // Update progress check after seek
           setTimeout(checkVideoProgress, 200);
         } else {
@@ -1460,6 +1532,45 @@
     });
     
     fetchMedia();
+    
+    // Function to reinforce progress bar styling (iOS fix)
+    function reinforceProgressBarStyling() {
+      const progressBarContainer = document.getElementById('progressBarContainer');
+      if (progressBarContainer) {
+        progressBarContainer.style.backgroundColor = 'rgb(51 65 85)';
+        progressBarContainer.style.borderRadius = '9999px';
+        progressBarContainer.classList.add('bg-dark-700');
+        
+        // Also ensure the Tailwind classes are maintained
+        if (!progressBarContainer.classList.contains('w-full')) {
+          progressBarContainer.classList.add('w-full', 'bg-dark-700', 'rounded-full', 'cursor-pointer', 'relative', 'transition-all', 'duration-200', 'group');
+        }
+      }
+      
+      // Ensure thumb z-index is maintained
+      const progressThumb = document.getElementById('progressThumb');
+      if (progressThumb) {
+        progressThumb.style.zIndex = '10';
+        progressThumb.style.position = 'absolute';
+      }
+      
+      // Ensure progress bar z-index
+      const progressBar = document.getElementById('progressBar');
+      if (progressBar) {
+        progressBar.style.zIndex = '1';
+        progressBar.style.position = 'relative';
+      }
+    }
+    
+    // Call reinforcement on page load
+    setTimeout(reinforceProgressBarStyling, 100);
+    
+    // Reinforce styling after any touch event on iOS
+    if ('ontouchstart' in window) {
+      document.addEventListener('touchend', () => {
+        setTimeout(reinforceProgressBarStyling, 50);
+      });
+    }
     
     // Initial OBS status check
     checkOBSStatus();
