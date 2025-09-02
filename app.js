@@ -122,7 +122,11 @@ io.on('connection', (socket) => {
   
   // Send current state to newly connected client
   socket.emit('obsStatus', { connected: obsConnected });
-  socket.emit('currentPlaying', currentPlayingMedia);
+  const progressBarVisible = currentPlayingMedia.type === 'video' && currentPlayingMedia.filePath;
+  socket.emit('currentPlaying', {
+    ...currentPlayingMedia,
+    progressBarVisible: progressBarVisible
+  });
   
   // Handle client disconnect
   socket.on('disconnect', () => {
@@ -132,13 +136,21 @@ io.on('connection', (socket) => {
   // Handle client requesting current status
   socket.on('requestStatus', () => {
     socket.emit('obsStatus', { connected: obsConnected });
-    socket.emit('currentPlaying', currentPlayingMedia);
+    const progressBarVisible = currentPlayingMedia.type === 'video' && currentPlayingMedia.filePath;
+    socket.emit('currentPlaying', {
+      ...currentPlayingMedia,
+      progressBarVisible: progressBarVisible
+    });
   });
 });
 
 // Function to broadcast current playing media to all clients
 function broadcastCurrentPlaying() {
-  io.emit('currentPlaying', currentPlayingMedia);
+  const progressBarVisible = currentPlayingMedia.type === 'video' && currentPlayingMedia.filePath;
+  io.emit('currentPlaying', {
+    ...currentPlayingMedia,
+    progressBarVisible: progressBarVisible
+  });
 }
 
 // Function to broadcast OBS status to all clients

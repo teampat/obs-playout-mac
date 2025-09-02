@@ -440,10 +440,10 @@
       // Update media grid to show active states
       updateActiveStatesOnly();
       
-      // Handle progress bar visibility
-      if (data.type === 'video' && data.filePath) {
+      // Handle progress bar visibility based on server state
+      if (data.progressBarVisible) {
         showProgressBar();
-      } else if (!data.filePath) {
+      } else {
         hideProgressBar();
       }
     });
@@ -517,9 +517,7 @@
         let displayText = '';
         if (current.type === 'video') {
           displayText = `🎬 ${current.filename}`;
-          if (current.durationFormatted) {
-            displayText += ` (${current.durationFormatted})`;
-          }
+          // Remove duration display from progress bar - show only filename
         } else if (current.type === 'image') {
           displayText = `🖼️ ${current.filename}`;
         }
